@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, slice::SliceIndex, str::FromStr, sync::Arc};
+use std::{collections::HashMap, fmt::Display, str::FromStr, sync::Arc};
 use axum::extract::ws::{Message};
 use mongodb::bson::{DateTime, oid::ObjectId};
 use serde::{Deserialize, Serialize};
@@ -47,8 +47,10 @@ pub struct Docs{
     #[serde(rename = "_id",skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
     pub author: Option<ObjectId>,
+    pub colaborators:Option<ObjectId>,
     pub title: String,
     pub content: String,
+    pub starred: Option<bool>,
     pub last_update: Option<DateTime>
 }
 
@@ -64,6 +66,17 @@ pub enum WsEvents {
     Insert(Update),
     Delete(Update),
 }
+
+// impl Display for WsEvents{
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match Self {
+//             Self::Delete(d) =>{
+                
+//             }
+//         }
+//         write!(f,"Message : {{\n type: {},\ndata: {}\n }}",Self::Delete())
+//     }
+// }
 
 pub type ClientsMap = Arc<Mutex<HashMap<String, Client>>>;
 

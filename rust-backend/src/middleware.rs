@@ -1,47 +1,60 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, RequestExt,
-    body::Body,
-    http::{Request, StatusCode},
+    Extension, Json,
+    extract::Request,
+    http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use serde_json::json;
+use tower_cookies::Cookies;
 
 use crate::{db::Db, utils};
 ///Auth Middleware
 pub async fn auth_middleware(
     Extension(db): Extension<Arc<Db>>,
-    mut req: Request<Body>,
+    cookies: Cookies,
+    req: Request,
     next: Next,
 ) -> Response {
-    let parts = req.extract_parts().await.unwrap();
-    match utils::extract_cookies(&parts).await {
-        Some(claims) => {
-            let res = db.find_user_with_id(claims.sub).await;
-            match res {
-                Ok(_) => {
-                    return next.run(req).await
-                }
-                Err(e) => {
-                    return (
-                        StatusCode::UNAUTHORIZED,
-                        Json(json!({
-                            "err":e
-                        })),
-                    ).into_response();
+    let cookie = cookies.get("token");
+    match cookie {
+        Some(c) => match utils::decode_cookie(c.clone()).await {
+            Some(claims) => {
+                let res = db.find_user_with_id(claims.sub).await;
+                match res {
+                    Ok(_) => return next.run(req).await,
+                    Err(e) => {
+                        log::error!("{}", e);
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(json!({
+                                "err":e
+                            })),
+                        )
+                            .into_response();
+                    }
                 }
             }
-        }
+            None => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(json!({
+                        "err":"inavlid jwt 2",
+                    })),
+                )
+                    .into_response();
+            }
+        },
         None => {
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(json!({
-                    "err":"inavlid jwt",
-                    "parts":parts.uri.to_string()
+                    "err":"inavlid jwt 1",
                 })),
-            ).into_response();
+            )
+                .into_response();
         }
     }
 }

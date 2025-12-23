@@ -2,14 +2,14 @@ use axum::http::request::Parts;
 use jsonwebtoken::{DecodingKey, Validation, decode};
 use tower_cookies::Cookie;
 
-use crate::models::{self, IntoObjectId};
+use crate::models::{self};
 
 pub async fn extract_cookies(parts: &Parts) -> Option<models::Claims> {
     let cookie = parts.headers.get("Cookie");
     match cookie {
         Some(c) => {
             let jwt = c.to_str().unwrap();
-            if let Some((_, token)) = jwt.split_once(" ") {
+            if let Some((_, token)) = jwt.split_once("=") {
                 let key = &DecodingKey::from_secret("hello".as_ref());
                 let claims = decode::<models::Claims>(token, key, &Validation::default());
                 match claims {
@@ -27,26 +27,20 @@ pub async fn extract_cookies(parts: &Parts) -> Option<models::Claims> {
     }
 }
 
-pub async fn decode_cookie(cookie:Cookie<'_>) -> Option<models::Claims>{
-    let cookie = cookie.to_string();
-    match cookie.split_once(" ") {
-        Some((name, token)) => {
-            if !name.starts_with("token") {
-                return None;
-            }
-            let key = &DecodingKey::from_secret("hello".as_ref());
-            let claims = decode::<models::Claims>(token, key, &Validation::default());
-            match claims {
-                Ok(c) =>{
-                    Some(c.claims)
-                }
-                Err(e) => {
-                    log::error!("{}",e.to_string());
-                    None
-                }
-            }
+pub async fn decode_cookie(cookie: Cookie<'_>) -> Option<models::Claims> {
+    let (name, token) = (cookie.name(), cookie.value());
+    if !(name == "token") {
+        log::error!("name did not match\nname: {}",name);
+        return None;
+    }
+    let key = &DecodingKey::from_secret("hello".as_ref());
+    let claims = decode::<models::Claims>(token, key, &Validation::default());
+    match claims {
+        Ok(c) => Some(c.claims),
+        Err(e) => {
+            log::error!("{}", e.to_string());
+            None
         }
-        None => None
     }
 }
 

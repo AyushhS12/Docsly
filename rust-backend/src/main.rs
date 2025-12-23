@@ -1,48 +1,70 @@
 use std::{collections::HashMap, env, sync::Arc};
 
-use axum::{Extension, Router};
+use axum::{
+    Extension, Router,
+    http::{
+        HeaderValue, Method,
+        header::{AUTHORIZATION, CONTENT_TYPE},
+    },
+};
 use tokio::{net::TcpListener, sync::Mutex};
 use tower_cookies::CookieManagerLayer;
+use tower_http::cors::CorsLayer;
 
 use crate::db::Db;
-mod routes;
-mod models;
-mod middleware;
 mod db;
+mod middleware;
+mod models;
+mod routes;
 mod utils;
 #[tokio::main]
 pub async fn main() {
     dotenv::dotenv().ok().unwrap();
     env_logger::init();
-    let env_port  = env::var("PORT");
+    let env_port = env::var("PORT");
     let address: String;
     match env_port {
         Ok(p) => {
             address = "0.0.0.0:".to_owned() + p.as_str();
         }
         Err(e) => {
-            log::info!("{}\n",e);
+            log::info!("{}\n", e);
             log::debug!("Running on default local port");
-            address = "localhost:".to_owned() +"7878";
+            address = "localhost:".to_owned() + "7878";
         }
     };
-    log::info!("Server listening on http://{}",address);
+    log::info!("Server listening on http://{}", address);
     let listener = TcpListener::bind(address).await.unwrap();
-    let router = Router::new();
+    let cors = CorsLayer::new()
+        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([CONTENT_TYPE, AUTHORIZATION])
+        .allow_credentials(true);
     let db = Arc::new(Db::init().await);
     let clients: models::ClientsMap = Arc::new(Mutex::new(HashMap::new()));
     let doc_states: models::DocStateMap = Arc::new(Mutex::new(HashMap::new()));
+    let router = Router::new();
     let app = manage_routes(router)
         .layer(Extension(db))
         .layer(Extension(clients))
         .layer(Extension(doc_states))
-        .layer(CookieManagerLayer::default());
+        .layer(cors)
+        .layer(CookieManagerLayer::new());
 
     axum::serve(listener, app).await.unwrap();
 }
 
-fn manage_routes(router : Router) -> Router{
-    router.nest("/doc", routes::doc_routes())
-        .nest("/user", routes::user_routes()).layer(axum::middleware::from_fn(middleware::auth_middleware))
-        .nest("/auth", routes::auth_routes())
+fn manage_routes(router: Router) -> Router {
+    let public_routes = Router::new().nest("/auth", routes::auth_routes());
+    let protected_routes = Router::new()
+        .nest("/doc", routes::doc_routes())
+        .nest("/user", routes::user_routes())
+        .layer(axum::middleware::from_fn(middleware::auth_middleware));
+    Router::new().nest("/api", router.merge(protected_routes).merge(public_routes))
 }

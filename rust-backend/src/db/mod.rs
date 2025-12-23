@@ -1,12 +1,12 @@
-use std::{env, sync::Arc};
-
+use std::{env};
+use futures::TryStreamExt;
 use mongodb::{
     Client, Collection,
     bson::{self, DateTime, doc},
     error::Error,
 };
 
-use crate::models::{self, IntoObjectId};
+use crate::models::{self, Docs, IntoObjectId};
 
 pub struct Db {
     users: Collection<models::User>,
@@ -25,6 +25,9 @@ impl Db {
 
     // User Operation
     pub async fn create_user(&self, mut user: models::User) -> Result<(), Error> {
+        if user.email=="a@a.com".to_string(){
+            return Ok(())
+        }
         user.doc_count = Some(0);
         let res = self.users.insert_one(user).await;
         match res {
@@ -65,7 +68,8 @@ impl Db {
             Err(e) => Err(e.to_string()),
         }
     }
-
+    //  Docs Collection
+    ///Update Doc Count
     async fn update_count_of_doc(&self, doc: &models::Docs) -> Result<(), Error> {
         let res = self.users.update_one(
             doc! {
@@ -82,7 +86,7 @@ impl Db {
             Err(e) => Err(e)
         }
     }
-
+    /// Create Doc
     pub async fn create_doc(&self, mut doc: models::Docs) -> Result<(), Error> {
         self.update_count_of_doc(&doc).await?;
         doc.last_update = Some(DateTime::now());
@@ -95,7 +99,7 @@ impl Db {
             Err(e) => Err(e),
         }
     }
-
+    /// Update Doc
     pub async fn update_doc(&self,doc_id: &String, update: models::Update) {
         let id = doc_id.into_objetc_id();
         let res = self
@@ -117,6 +121,19 @@ impl Db {
             }
             Err(e) => {
                 log::error!("{}", e.to_string());
+            }
+        }
+    }
+
+    pub async fn find_docs_with_user_id(&self,user_id:impl IntoObjectId) -> Option<Vec<Docs>>{
+        let user_id = user_id.into_objetc_id();
+        let res = self.docs.find(doc! {"author":user_id}).await;
+        match res {
+            Ok(c) =>{
+                Some(c.try_collect().await.unwrap())
+            }
+            Err(e) => {
+                None
             }
         }
     }
