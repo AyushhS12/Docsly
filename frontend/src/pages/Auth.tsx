@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
-import { FileText, Mail, Lock, User, Eye, EyeOff,ArrowRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { FileText, Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import toast, { ErrorIcon } from 'react-hot-toast';
+import api from '../lib/api';
 
 export default function DocslyAuth() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const location = useLocation()
+  const navigate = useNavigate()
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -20,10 +25,64 @@ export default function DocslyAuth() {
     }, 150);
   };
 
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    // Handle authentication logic here
+  const handleSubmit = async () => {
+    const toastId = toast.loading("Signing In...", {
+      icon: <Loader2 className="animate-spin" />,
+    })
+    try {
+      if (!isSignUp) {
+        const { email, password } = { ...formData }
+        const res = await api.post<{ token: string, success: boolean }>("/auth/login", { email, password })
+        if (res.data.success) {
+          // Success Toast
+          localStorage.setItem("docsly_token",res.data.token)
+          setTimeout(() => {
+            toast.success("Login successfully", {
+              id: toastId,
+              icon: <CheckCircle2 className="text-green-500" />,
+              duration: 2000,
+            })
+            navigate("/dashboard")
+          }, 1500)
+          //
+        }
+      } else {
+        const res = await api.post<{ success: boolean }>("/auth/signup", formData)
+        if (res.data.success) {
+          const toastId = toast.loading("Creating account...", {
+            icon: <Loader2 className="animate-spin" />,
+          })
+
+          setTimeout(() => {
+            toast.success("Account created successfully", {
+              id: toastId,
+              icon: <CheckCircle2 className="text-green-500" />,
+              duration: 2000,
+            })
+            handleModeSwitch(false)
+          }, 1500)
+        }
+      }
+    } catch (e) {
+      console.error(e)
+      setTimeout(() => {
+        toast.error("An error occurred, please try again", {
+          id: toastId,
+          icon: <ErrorIcon className="text-green-500" />,
+          duration: 1500,
+        })
+      }, 1000)
+    }
   };
+
+  useEffect(() => {
+    if (location.state) {
+      const a = () => {
+        handleModeSwitch(true)
+      }
+      return a
+    }
+  }, [location.state])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -51,7 +110,7 @@ export default function DocslyAuth() {
               Docsly
             </span>
           </div>
-          
+
           <div className="space-y-6">
             <h1 className="text-5xl font-bold leading-tight">
               <span className="bg-linear-to-r from-purple-600 via-pink-500 to-orange-400 bg-clip-text text-transparent">
@@ -109,21 +168,19 @@ export default function DocslyAuth() {
             <div className="flex bg-gray-100 rounded-xl p-1 mb-8">
               <button
                 onClick={() => handleModeSwitch(false)}
-                className={`flex-1 py-3 rounded-lg font-semibold transition-all ${
-                  !isSignUp
-                    ? 'bg-white text-purple-600 shadow-md'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
+                className={`flex-1 py-3 rounded-lg font-semibold transition-all ${!isSignUp
+                  ? 'bg-white text-purple-600 shadow-md'
+                  : 'text-gray-600 hover:text-gray-900'
+                  }`}
               >
                 Sign In
               </button>
               <button
                 onClick={() => handleModeSwitch(true)}
-                className={`flex-1 py-3 rounded-lg font-semibold transition-all ${
-                  isSignUp
-                    ? 'bg-white text-purple-600 shadow-md'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
+                className={`flex-1 py-3 rounded-lg font-semibold transition-all ${isSignUp
+                  ? 'bg-white text-purple-600 shadow-md'
+                  : 'text-gray-600 hover:text-gray-900'
+                  }`}
               >
                 Sign Up
               </button>
@@ -134,8 +191,8 @@ export default function DocslyAuth() {
                 {isSignUp ? 'Create your account' : 'Welcome back'}
               </h2>
               <p className="text-gray-600 mb-8">
-                {isSignUp 
-                  ? 'Start collaborating with your team today' 
+                {isSignUp
+                  ? 'Start collaborating with your team today'
                   : 'Sign in to continue to your documents'}
               </p>
             </div>
@@ -174,9 +231,8 @@ export default function DocslyAuth() {
                     Full Name
                   </label>
                   <div className={`relative group ${focusedField === 'name' ? 'scale-[1.02]' : ''} transition-transform`}>
-                    <User className={`absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${
-                      focusedField === 'name' ? 'text-purple-600' : 'text-gray-400'
-                    }`} />
+                    <User className={`absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === 'name' ? 'text-purple-600' : 'text-gray-400'
+                      }`} />
                     <input
                       type="text"
                       name="name"
@@ -185,11 +241,10 @@ export default function DocslyAuth() {
                       onFocus={() => setFocusedField('name')}
                       onBlur={() => setFocusedField('')}
                       placeholder="Enter your name"
-                      className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:outline-none transition-all ${
-                        focusedField === 'name'
-                          ? 'border-purple-500 shadow-lg'
-                          : 'border-gray-200 hover:border-purple-300'
-                      }`}
+                      className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:outline-none transition-all ${focusedField === 'name'
+                        ? 'border-purple-500 shadow-lg'
+                        : 'border-gray-200 hover:border-purple-300'
+                        }`}
                     />
                   </div>
                 </div>
@@ -200,9 +255,8 @@ export default function DocslyAuth() {
                   Email Address
                 </label>
                 <div className={`relative group ${focusedField === 'email' ? 'scale-[1.02]' : ''} transition-transform`}>
-                  <Mail className={`absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${
-                    focusedField === 'email' ? 'text-purple-600' : 'text-gray-400'
-                  }`} />
+                  <Mail className={`absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === 'email' ? 'text-purple-600' : 'text-gray-400'
+                    }`} />
                   <input
                     type="email"
                     name="email"
@@ -211,11 +265,10 @@ export default function DocslyAuth() {
                     onFocus={() => setFocusedField('email')}
                     onBlur={() => setFocusedField('')}
                     placeholder="you@example.com"
-                    className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:outline-none transition-all ${
-                      focusedField === 'email'
-                        ? 'border-purple-500 shadow-lg'
-                        : 'border-gray-200 hover:border-purple-300'
-                    }`}
+                    className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:outline-none transition-all ${focusedField === 'email'
+                      ? 'border-purple-500 shadow-lg'
+                      : 'border-gray-200 hover:border-purple-300'
+                      }`}
                   />
                 </div>
               </div>
@@ -225,9 +278,8 @@ export default function DocslyAuth() {
                   Password
                 </label>
                 <div className={`relative group ${focusedField === 'password' ? 'scale-[1.02]' : ''} transition-transform`}>
-                  <Lock className={`absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${
-                    focusedField === 'password' ? 'text-purple-600' : 'text-gray-400'
-                  }`} />
+                  <Lock className={`absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === 'password' ? 'text-purple-600' : 'text-gray-400'
+                    }`} />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     name="password"
@@ -236,11 +288,10 @@ export default function DocslyAuth() {
                     onFocus={() => setFocusedField('password')}
                     onBlur={() => setFocusedField('')}
                     placeholder="Enter your password"
-                    className={`w-full pl-12 pr-12 py-3 border-2 rounded-xl focus:outline-none transition-all ${
-                      focusedField === 'password'
-                        ? 'border-purple-500 shadow-lg'
-                        : 'border-gray-200 hover:border-purple-300'
-                    }`}
+                    className={`w-full pl-12 pr-12 py-3 border-2 rounded-xl focus:outline-none transition-all ${focusedField === 'password'
+                      ? 'border-purple-500 shadow-lg'
+                      : 'border-gray-200 hover:border-purple-300'
+                      }`}
                   />
                   <button
                     type="button"

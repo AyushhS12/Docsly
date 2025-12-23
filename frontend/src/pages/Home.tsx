@@ -1,17 +1,22 @@
 import { useState, useEffect } from 'react';
 import { FileText, Users, Zap, Globe, Check, ArrowRight, Sparkles } from 'lucide-react';
+import useAuthGuard from '../context/auth/useAuthGuard';
+import { useNavigate } from 'react-router-dom';
 
 export default function DocslyLanding() {
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
     const [isVisible, setIsVisible] = useState(false);
+    const {guard} = useAuthGuard()
+    const navigate = useNavigate()
     useEffect(() => {
+        guard()
         const handleMouseMove = async (e: MouseEvent) => {
             setIsVisible(true)
             setCursorPos({ x: e.clientX, y: e.clientY });
         };
         window.addEventListener('mousemove', handleMouseMove);
         return () => window.removeEventListener('mousemove', handleMouseMove);
-    }, []);
+    }, [guard, navigate]);
 
     const features = [
         { icon: <Zap className="w-6 h-6" />, title: "Real-time Editing", desc: "See changes instantly as you and your team type" },
@@ -57,10 +62,10 @@ export default function DocslyLanding() {
                         <a href="#about" className="hover:text-purple-600 transition-colors">About</a>
                     </div>
                     <div className="flex space-x-4">
-                        <button className="px-4 py-2 cursor-pointer text-purple-600 hover:text-purple-700 transition-colors">
+                        <button onClick = {()=>{navigate("auth")}}className="px-4 py-2 cursor-pointer text-purple-600 hover:text-purple-700 transition-colors">
                             Sign In
                         </button>
-                        <button className="px-6 py-2 bg-linear-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transform hover:scale-105 transition-all">
+                        <button onClick={()=>{navigate("auth",{state:true})}} className="px-6 py-2 bg-linear-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transform hover:scale-105 transition-all">
                             Get Started
                         </button>
                     </div>
