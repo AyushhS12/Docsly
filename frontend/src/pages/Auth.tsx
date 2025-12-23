@@ -32,7 +32,7 @@ export default function DocslyAuth() {
     try {
       if (!isSignUp) {
         const { email, password } = { ...formData }
-        const res = await api.post<{ token: string, success: boolean }>("/auth/login", { email, password })
+        const res = await api.post<{ token: string, success: boolean }>("auth/login", { email, password })
         if (res.data.success) {
           // Success Toast
           localStorage.setItem("docsly_token",res.data.token)
@@ -47,7 +47,7 @@ export default function DocslyAuth() {
           //
         }
       } else {
-        const res = await api.post<{ success: boolean }>("/auth/signup", formData)
+        const res = await api.post<{ success: boolean }>("auth/signup", formData)
         if (res.data.success) {
           const toastId = toast.loading("Creating account...", {
             icon: <Loader2 className="animate-spin" />,

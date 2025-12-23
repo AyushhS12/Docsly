@@ -12,7 +12,7 @@ const useAuthGuard = () => {
             navigate("/auth")
         } else {
             try {
-                const res = await api.get<{ success: boolean }>("/api/auth/me", { withCredentials: true });
+                const res = await api.get<{ success: boolean }>("/auth/me", { withCredentials: true });
                 if (res.data.success) {
                     return
                 } else {
