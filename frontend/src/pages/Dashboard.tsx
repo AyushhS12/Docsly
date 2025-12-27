@@ -1,19 +1,29 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, Plus, Upload, Edit3, Search, Filter, MoreVertical, Clock, Users, Star, Share2, Download, FolderOpen, Grid, List, Bell, Settings, User, LogOut } from 'lucide-react';
+import { FileText, Plus, Upload, Edit3, Search, Filter, MoreVertical, Clock, Users, Star, Share2, Download, FolderOpen, Grid, List, Bell, Settings, User, LogOut, CheckCircle } from 'lucide-react';
 import useAuthGuard from '../context/auth/useAuthGuard';
 import axios from 'axios';
 import CreateNewPopup from '../components/CreateNewPopUp';
+import api from '../lib/api';
+import toast, { ErrorIcon } from 'react-hot-toast';
+import DocumentOptionsDropdown from '../components/DocumentOptionsDropDown';
+import { useNavigate } from 'react-router-dom';
 
 interface Id {
   $oid: string
 }
 
-interface Doc {
+interface Author {
   id: Id,
-  author: Id,
-  colaborators: Id[],
+  name: string,
+}
+
+interface Doc {
+  _id: Id,
+  author: Author,
+  collaborators: Id[],
   title: string,
   content: string,
+  type: string,
   starred: boolean,
   last_update: string
 }
@@ -23,33 +33,56 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [docs, setDocs] = useState<Doc[]>([]);
-  // const [docs, setDocs] = useState<Record<string,unknown> | null>(null);
   const { guard, logout } = useAuthGuard()
+  const navigate = useNavigate()
 
   const [isCreatePopupOpen, setIsCreatePopupOpen] = useState(false);
 
-  const handleCreate = (type: string, name: string) => {
-    console.log('Creating:', type, name);
-    // Handle document creation here
-  };
+  const onCreate = useCallback(async (type: string, name: string) => {
+    const toastId = toast.loading("Creating Document... Please wait")
+    try {
+      const res = await api.post<{ success: boolean, message: string }>("/doc/create", { title: name, type })
+      if (res.data.success) {
+        console.log("here")
+        setTimeout(() => {
+          toast.success(res.data.message, {
+            id: toastId,
+            icon: <CheckCircle className="text-green-500" />,
+            duration: 1500,
+          })
+        }, 1000)
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_) {
+      setTimeout(() => {
+        setTimeout(() => {
+          toast.error("An error occurred", {
+            id: toastId,
+            icon: <ErrorIcon className="text-red-500" />,
+            duration: 1500,
+          })
+        }, 1000)
+      })
+    }
+  }, [])
 
   const getUserDocs = useCallback(async () => {
-    const res = await axios.get<{ docs: Doc[] }>("/api/doc/get_docs",{withCredentials:true})
+    const res = await axios.get<{ docs: Doc[] }>("/api/doc/get_docs", { withCredentials: true })
     if (res.data) {
       setDocs(res.data.docs)
       console.log(res.data.docs)
     }
   }, [])
   useEffect(() => {
-  const init = async () => {
-    await guard()
-    await getUserDocs()
-  }
-  init()
-}, [guard, getUserDocs])
+    const init = async () => {
+      await guard()
+      await getUserDocs()
+    }
+    init()
+  }, [guard, getUserDocs])
 
   const toggleStar = (id: string) => {
-    setDocs(docs.map(doc => doc.id.$oid === id ? { ...doc, starred: !doc.starred } : doc));
+    setDocs(docs.map(doc => doc._id.$oid === id ? { ...doc, starred: !doc.starred } : doc));
   };
 
   const filteredDocs = docs.filter(doc =>
@@ -61,8 +94,8 @@ export default function Dashboard() {
       {/* Create New Pop Up */}
       <CreateNewPopup
         isOpen={isCreatePopupOpen}
-        onClose={()=>setIsCreatePopupOpen(false)}
-        onCreate={handleCreate}
+        onClose={() => setIsCreatePopupOpen(false)}
+        onCreate={onCreate}
       />
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 h-full w-64 bg-white/80 backdrop-blur-sm border-r border-purple-100 shadow-lg z-20">
@@ -213,7 +246,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredDocs.map((doc) => (
                 <div
-                  key={doc.id.$oid}
+                  key={doc._id.$oid}
                   className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border-2 border-purple-100 hover:border-purple-300 hover:shadow-xl transform hover:-translate-y-1 transition-all cursor-pointer group"
                 >
                   <div className="flex items-start justify-between mb-4">
@@ -222,7 +255,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => toggleStar(doc.id.$oid)}
+                        onClick={() => toggleStar(doc._id.$oid)}
                         className="p-1 hover:bg-purple-50 rounded transition-colors"
                       >
                         <Star
@@ -230,9 +263,12 @@ export default function Dashboard() {
                             }`}
                         />
                       </button>
-                      <button className="p-1 hover:bg-purple-50 rounded transition-colors">
-                        <MoreVertical className="w-5 h-5 text-gray-400" />
-                      </button>
+                      <DocumentOptionsDropdown
+                        onEdit={() => navigate("/doc/edit/"+doc._id.$oid)}
+                        onDelete={() => console.log('Delete', doc._id.$oid)}
+                        onSave={() => console.log('Save', doc._id.$oid)}
+                        onShare={() => console.log('Share', doc._id.$oid)}
+                      />
                     </div>
                   </div>
 
@@ -243,11 +279,11 @@ export default function Dashboard() {
                   <div className="flex items-center space-x-4 text-sm text-gray-600 mb-4">
                     <div className="flex items-center space-x-1">
                       <Clock className="w-4 h-4" />
-                      <span>{doc.last_update}</span>
+                      {/* <span>{doc.last_update}</span> */}
                     </div>
                     <div className="flex items-center space-x-1">
                       <Users className="w-4 h-4" />
-                      {doc.colaborators.map(x => {
+                      {doc.collaborators?.map(x => {
                         return (
                           <span>{x.$oid}</span>
                         )
@@ -256,7 +292,7 @@ export default function Dashboard() {
                   </div>
 
                   <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                    <span className="text-sm text-gray-600">By {doc.author.$oid}</span>
+                    <span className="text-sm text-gray-600">Author: {doc.author.name}</span>
                     <div className="flex space-x-1">
                       <button className="p-2 hover:bg-purple-50 rounded-lg transition-colors">
                         <Share2 className="w-4 h-4 text-gray-600" />
@@ -284,7 +320,7 @@ export default function Dashboard() {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {filteredDocs.map((doc) => (
-                      <tr key={doc.id.$oid} className="hover:bg-purple-50 transition-colors cursor-pointer">
+                      <tr key={doc._id.$oid} className="hover:bg-purple-50 transition-colors cursor-pointer">
                         <td className="px-6 py-4">
                           <div className="flex items-center space-x-3">
                             <div className="bg-linear-to-br from-purple-100 to-pink-100 p-2 rounded-lg">
@@ -294,12 +330,12 @@ export default function Dashboard() {
                             {doc.starred && <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-gray-700">{doc.author.$oid}</td>
-                        <td className="px-6 py-4 text-gray-600">{doc.last_update}</td>
+                        <td className="px-6 py-4 text-gray-700">{doc.author.id.$oid}</td>
+                        {/* <td className="px-6 py-4 text-gray-600">{doc.last_update}</td> */}
                         <td className="px-6 py-4">
                           <div className="flex items-center space-x-1 text-gray-600">
                             <Users className="w-4 h-4" />
-                            {doc.colaborators.map(x => {
+                            {doc.collaborators.map(x => {
                               return (
                                 <span>{x.$oid}</span>
                               )
@@ -334,7 +370,7 @@ export default function Dashboard() {
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">No documents found</h3>
               <p className="text-gray-600 mb-6">Try adjusting your search or create a new document</p>
-              <button onClick={()=>setIsCreatePopupOpen(true)} className="px-6 py-3 bg-linear-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-xl transform hover:scale-105 transition-all">
+              <button onClick={() => setIsCreatePopupOpen(true)} className="px-6 py-3 bg-linear-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-xl transform hover:scale-105 transition-all">
                 Create New Document
               </button>
             </div>

@@ -10,11 +10,12 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use log::error;
+use serde_json::from_str;
 use tower_cookies::Cookies;
 
 use crate::{
     db::Db,
-    models::{self, Client, ClientsMap, DocState, IntoObjectId},
+    models::{self, Client, ClientsMap, DocState, IntoObjectId, Update},
     utils::decode_cookie,
 };
 
@@ -85,19 +86,18 @@ async fn handle_edit(
 
     //Main websocket loop
     while let Some(Ok(msg)) = receiver.next().await {
-        let res = format!("message: {}", msg.to_text().unwrap());
-        tx.send(Message::text(res)).await.unwrap();
-        // let data: WsEvents = from_str(msg.to_text().unwrap()).unwrap();
-        // match data {
-        //     WsEvents::Insert(m) => {
-        //         log::debug!("{:?}", m);
-        //         db.update_doc(&doc_id,m).await;
-        //     }
-        //     WsEvents::Delete(m) => {
-        //         log::debug!("{:?}", m);
-        //         db.update_doc(&doc_id,m).await;
-        //     }
-        // }
+        // let res = format!("message: {}", msg.to_text().unwrap());
+        // tx.send(Message::text(res)).await.unwrap();
+        let update = match msg.to_text() {
+            Ok(message) => {
+                from_str::<Update>(message)
+            }
+            Err(e) => {
+                log::error!("{}",e);
+                tx.send(Message::text(e.to_string())).await.unwrap();
+                return;
+            }
+        };
     }
 
     readloop.abort();

@@ -17,14 +17,13 @@ export default function Edit() {
     { id: 2, name: 'Sarah Chen', color: 'from-blue-500 to-cyan-500', active: true },
     { id: 3, name: 'Alex Kim', color: 'from-green-500 to-emerald-500', active: false },
   ]);
-  const {guard , logout} = useAuthGuard()
+  const {guard} = useAuthGuard()
   const wsRef = useRef<WebSocket | null>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const lastContentRef = useRef('');
   const cursorPositionRef = useRef(0);
   const navigate = useNavigate()
   const { docId } = useParams<{ docId: string }>()
-  console.log(docId);
   // Initialize WebSocket connection
   const connectWebSocket = useCallback(async () => {
     try {
@@ -39,8 +38,8 @@ export default function Edit() {
         console.error(e)
         // setTimeout(connectWebSocket,2000)
       }
-      ws.onmessage = (e) => {
-        console.log(e.data)
+      ws.onmessage = (msg) => {
+        
       }
       // Simulate receiving remote updates
       const simulateRemoteUpdates = setInterval(() => {

@@ -16,3 +16,4 @@ mongodb = "3.4.1"
 futures = "0.3.31"
 jsonwebtoken = {version = "10.2.0" , features = ["rust_crypto"]}
 tower-http = { version = "0.5", features = ["cors"] }
+chrono = {version = "0.4.42", features = ["serde"]}

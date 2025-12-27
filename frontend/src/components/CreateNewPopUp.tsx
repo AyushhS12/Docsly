@@ -12,6 +12,10 @@ export default function CreateNewPopup({ isOpen, onClose, onCreate }: CreateNewP
   const [selectedType, setSelectedType] = useState<string>('');
   const [documentName, setDocumentName] = useState('');
 
+  ///Blank Doc Function
+  
+
+  //Quick Actions
   const quickActions = [
     {
       id: 'blank',
@@ -126,7 +130,7 @@ export default function CreateNewPopup({ isOpen, onClose, onCreate }: CreateNewP
           {step === 'choose' ? (
             <>
               {/* Header */}
-              <div className="relative bg-linear-o-r from-purple-600 to-pink-600 p-6 text-white">
+              <div className="relative bg-linear-to-r from-purple-600 to-pink-600 p-6 text-white">
                 <button
                   onClick={handleClose}
                   className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-lg transition-colors"
@@ -135,7 +139,7 @@ export default function CreateNewPopup({ isOpen, onClose, onCreate }: CreateNewP
                 </button>
                 <div className="flex items-center space-x-3">
                   <div className="bg-white/20 backdrop-blur-sm p-2.5 rounded-xl">
-                    <Plus className="w-6 h-6" />
+                    <Plus className="w-6 h-6 hover:scale-150 transition-transform" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Create New</h2>
@@ -154,9 +158,9 @@ export default function CreateNewPopup({ isOpen, onClose, onCreate }: CreateNewP
                       <button
                         key={action.id}
                         onClick={() => handleSelect(action.id, action.action)}
-                        className="flex flex-col items-center p-4 bg-linear-o-br from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border-2 border-purple-200 hover:border-purple-400 rounded-2xl transition-all group text-center"
+                        className="flex flex-col items-center p-4 bg-linear-to-br from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border-2 border-purple-200 hover:border-purple-400 rounded-2xl transition-all group text-center"
                       >
-                        <div className={`bg-linear-o-br ${action.color} p-3 rounded-xl mb-3 text-white group-hover:scale-110 transition-transform`}>
+                        <div className={`bg-linear-to-br ${action.color} p-3 rounded-xl mb-3 text-white group-hover:scale-110 transition-transform`}>
                           {action.icon}
                         </div>
                         <h4 className="font-bold text-gray-800 text-sm mb-1">{action.name}</h4>
@@ -176,7 +180,7 @@ export default function CreateNewPopup({ isOpen, onClose, onCreate }: CreateNewP
                         onClick={() => handleSelect(template.id)}
                         className="flex flex-col items-start p-4 bg-white hover:bg-purple-50 border-2 border-gray-200 hover:border-purple-400 rounded-xl transition-all group"
                       >
-                        <div className={`bg-linear-o-br ${template.color} p-2.5 rounded-lg mb-3 text-white group-hover:scale-110 transition-transform`}>
+                        <div className={`bg-linear-to-br ${template.color} p-2.5 rounded-lg mb-3 text-white group-hover:scale-110 transition-transform`}>
                           {template.icon}
                         </div>
                         <h4 className="font-bold text-gray-800 text-sm mb-1">{template.name}</h4>
@@ -190,7 +194,7 @@ export default function CreateNewPopup({ isOpen, onClose, onCreate }: CreateNewP
           ) : (
             <>
               {/* Header - Details Step */}
-              <div className="relative bg-linear-o-r from-purple-600 to-pink-600 p-6 text-white">
+              <div className="relative bg-linear-to-r from-purple-600 to-pink-600 p-6 text-white">
                 <button
                   onClick={() => setStep('choose')}
                   className="absolute top-4 left-4 p-2 hover:bg-white/20 rounded-lg transition-colors"
@@ -213,7 +217,7 @@ export default function CreateNewPopup({ isOpen, onClose, onCreate }: CreateNewP
               <div className="p-8">
                 {/* Selected Template Preview */}
                 <div className="text-center mb-6">
-                  <div className="inline-block bg-linear-o-br from-purple-100 to-pink-100 p-5 rounded-2xl mb-3">
+                  <div className="inline-block bg-linear-to-br from-purple-100 to-pink-100 p-5 rounded-2xl mb-3">
                     {[...quickActions, ...templates].find(t => t.id === selectedType)?.icon}
                   </div>
                   <h3 className="text-lg font-bold text-gray-800 mb-1">
@@ -273,7 +277,7 @@ export default function CreateNewPopup({ isOpen, onClose, onCreate }: CreateNewP
                 <button
                   onClick={handleCreate}
                   disabled={!documentName.trim()}
-                  className="w-full py-3.5 bg-linear-o-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2 group"
+                  className="w-full py-3.5 bg-linear-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2 group"
                 >
                   <span>Create Document</span>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

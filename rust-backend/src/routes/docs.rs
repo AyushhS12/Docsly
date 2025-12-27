@@ -11,7 +11,7 @@ use tower_cookies::Cookies;
 
 use crate::{
     db::Db,
-    models::{Docs, IntoObjectId},
+    models::{Author, Doc, IntoObjectId},
     utils::{self, extract_cookies},
 };
 pub async fn get_docs(Extension(db): Extension<Arc<Db>>, mut req: Request) -> impl IntoResponse {
@@ -38,18 +38,33 @@ pub async fn get_docs(Extension(db): Extension<Arc<Db>>, mut req: Request) -> im
 pub async fn create(
     Extension(db): Extension<Arc<Db>>,
     cookies: Cookies,
-    Json(mut doc): Json<Docs>,
+    Json(mut doc): Json<Doc>,
 ) -> impl IntoResponse {
     if let Some(cookie) = cookies.get("token") {
         let id = utils::decode_cookie(cookie).await.unwrap();
-        doc.author = Some(id.sub.into_objetc_id());
+        let author = match db.find_user_with_id(&id.sub).await {
+            Ok(a) => Author {
+                id: a.id,
+                name: a.name,
+            },
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({
+                        "err":"an error occurred"
+                    })),
+                );
+            }
+        };
+        doc.author = Some(author);
     } else {
     };
     match db.create_doc(doc).await {
         Ok(_) => (
             StatusCode::OK,
             Json(json!({
-                "message":"Document Created Successfully"
+                "success":true,
+                "message":"Document Created Successfully".to_string()
             })),
         ),
         Err(e) => {

@@ -22,7 +22,7 @@ pub async fn auth_middleware(
     match cookie {
         Some(c) => match utils::decode_cookie(c.clone()).await {
             Some(claims) => {
-                let res = db.find_user_with_id(claims.sub).await;
+                let res = db.find_user_with_id(&claims.sub).await;
                 match res {
                     Ok(_) => return next.run(req).await,
                     Err(e) => {
