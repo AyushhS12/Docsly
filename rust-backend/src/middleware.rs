@@ -10,7 +10,10 @@ use axum::{
 use serde_json::json;
 use tower_cookies::Cookies;
 
-use crate::{db::Db, utils};
+use crate::{
+    db::Db,
+    utils::{self},
+};
 ///Auth Middleware
 pub async fn auth_middleware(
     Extension(db): Extension<Arc<Db>>,
@@ -20,7 +23,7 @@ pub async fn auth_middleware(
 ) -> Response {
     let cookie = cookies.get("token");
     match cookie {
-        Some(c) => match utils::decode_cookie(c.clone()).await {
+        Some(c) => match utils::decode_cookie(c).await {
             Some(claims) => {
                 let res = db.find_user_with_id(&claims.sub).await;
                 match res {

@@ -26,7 +26,7 @@ export default function DocslyAuth() {
   };
 
   const handleSubmit = async () => {
-    const toastId = toast.loading("Signing In...", {
+    const toastId = toast.loading("Loading...", {
       icon: <Loader2 className="animate-spin" />,
     })
     try {
@@ -35,7 +35,7 @@ export default function DocslyAuth() {
         const res = await api.post<{ token: string, success: boolean }>("auth/login", { email, password })
         if (res.data.success) {
           // Success Toast
-          localStorage.setItem("docsly_token",res.data.token)
+          localStorage.setItem("docsly_token", res.data.token)
           setTimeout(() => {
             toast.success("Login successfully", {
               id: toastId,
@@ -49,7 +49,8 @@ export default function DocslyAuth() {
       } else {
         const res = await api.post<{ success: boolean }>("auth/signup", formData)
         if (res.data.success) {
-          const toastId = toast.loading("Creating account...", {
+          toast.loading("Creating account...", {
+            id:toastId,
             icon: <Loader2 className="animate-spin" />,
           })
 

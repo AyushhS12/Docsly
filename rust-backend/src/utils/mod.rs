@@ -1,5 +1,8 @@
-use std::env;
 
+use argon2::{
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::{SaltString, rand_core::OsRng},
+};
 use axum::http::request::Parts;
 use jsonwebtoken::{DecodingKey, Validation, decode};
 use tower_cookies::Cookie;
@@ -32,7 +35,7 @@ pub async fn extract_cookies(parts: &Parts) -> Option<models::Claims> {
 pub async fn decode_cookie(cookie: Cookie<'_>) -> Option<models::Claims> {
     let (name, token) = (cookie.name(), cookie.value());
     if !(name == "token") {
-        log::error!("name did not match\nname: {}",name);
+        log::error!("name did not match\nname: {}", name);
         return None;
     }
     let key = &DecodingKey::from_secret("hello".as_ref());
@@ -44,6 +47,20 @@ pub async fn decode_cookie(cookie: Cookie<'_>) -> Option<models::Claims> {
             None
         }
     }
+}
+
+pub fn hash_password(pass: &[u8]) -> Result<String, argon2::password_hash::Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon = Argon2::default();
+    let hash = argon.hash_password(pass, &salt)?;
+    Ok(hash.to_string())
+}
+
+pub fn verify_password_hash(pass: &str, hash: &str) -> Result<(), argon2::password_hash::Error> {
+    let hash = PasswordHash::new(hash)?;
+    let argon = Argon2::default();
+
+    argon.verify_password(pass.as_bytes(), &hash)
 }
 
 // pub async fn extract_id_from_parts(parts: &Parts) -> Option<impl IntoObjectId>{

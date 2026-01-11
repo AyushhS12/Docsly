@@ -8,21 +8,23 @@ use axum::{
     },
     response::Response,
 };
+use chrono::Utc;
 use futures::{SinkExt, StreamExt};
 use log::error;
-use serde_json::from_str;
+use serde_json::json;
+use tokio::sync::mpsc::{self};
 use tower_cookies::Cookies;
 
 use crate::{
     db::Db,
-    models::{self, Client, ClientsMap, DocState, IntoObjectId, Update},
+    models::{BufferMap, Client, DocsMap, IntoObjectId, Update},
     utils::decode_cookie,
 };
 
 pub async fn edit(
-    Extension(clients): Extension<ClientsMap>,
-    Extension(doc_states): Extension<models::DocStateMap>,
+    Extension(doc_states): Extension<DocsMap>,
     Extension(db): Extension<Arc<Db>>,
+    Extension(buffer_map): Extension<BufferMap>,
     doc_id: Path<String>,
     ws: WebSocketUpgrade,
     cookies: Cookies,
@@ -36,73 +38,95 @@ pub async fn edit(
                 Some(claims) => claims.sub,
                 None => return,
             },
+
             None => return,
         };
-        handle_edit(
-            clients.clone(),
-            doc_states,
-            user_id,
-            doc_id.to_string(),
-            db,
-            ws,
-        )
-        .await;
+        handle_edit(doc_states, user_id, doc_id.to_string(), db, ws, buffer_map).await;
     })
 }
 
-///Temporary Websocket Dunction
-#[allow(unused_variables)]
-#[allow(unused_assignments)]
-async fn handle_edit(
-    ref mut clients: ClientsMap,
-    docs: models::DocStateMap,
+///Websocket Function
+// #[allow(unused_variables)]
+// #[allow(unused_assignments)]
+async fn handle_edit<'a>(
+    docs: DocsMap,
     user_id: String,
     doc_id: String,
     db: Arc<Db>,
-    ws: WebSocket,
+    mut ws: WebSocket,
+    _buffer: BufferMap,
 ) {
-    log::debug!("{} connected", user_id);
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(128);
+    log::debug!("{} connected", &user_id);
+    let user_id = Arc::new(user_id.as_str());
+    let doc_id = doc_id.as_str();
+    let db = Arc::clone(&db);
+    let doc = match db.find_doc_with_id(doc_id).await {
+        Ok(d) => d,
+        Err(e) => {
+            #[allow(unused)]
+            ws.send(Message::text(e.error));
+            return;
+        }
+    };
+    let (tx, mut rx) = mpsc::channel::<Message>(128);
     let (mut sender, mut receiver) = ws.split();
-    let client = Client::new(tx.clone());
-    let id = user_id.clone();
-    let client_map = clients.lock();
-    client_map.await.insert(user_id.clone(), client);
-    let state = DocState::new(id.clone().into_objetc_id(), vec![]);
-    let s: &DocState;
-    if let Some(d) = docs.lock().await.get(&doc_id) {
-        s = d;
-    } else {
-        docs.lock().await.insert(doc_id.clone(), state);
-    }
-
-    // Readloop
+    let mut client = Client::new(Arc::clone(&user_id), tx.clone());
+    client.author = client.id == doc.author.unwrap().id.unwrap().to_hex();
+    docs.lock()
+        .await
+        .entry(doc_id.to_string())
+        .or_insert_with(Vec::new)
+        .push(client);
     let readloop = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
-            sender.send(msg).await.unwrap();
+            #[allow(unused)]
+            sender.send(Message::from(msg)).await;
         }
-        log::debug!("shutting down readloop for {}", id);
     });
-
-    //Main websocket loop
     while let Some(Ok(msg)) = receiver.next().await {
-        // let res = format!("message: {}", msg.to_text().unwrap());
-        // tx.send(Message::text(res)).await.unwrap();
-        let update = match msg.to_text() {
-            Ok(message) => {
-                from_str::<Update>(message)
+        if let Message::Close(_) = msg{
+            log::info!("user: {} disconnected",*user_id);
+            return;
+        }
+        let mut update = Update::from(msg);
+        update.from = Some(Arc::clone(&user_id).into_objetc_id());
+        update.timestamp = Some(Utc::now());
+        match docs.lock().await.get(doc_id) {
+            Some(clients) => {
+                for client in clients {
+                    if client.id == *user_id{
+                        continue;
+                    }
+                    #[allow(unused)]
+                    client.sender.send(Message::from(update.clone())).await;
+                }
+                if let Err(e) = db.handle_update(doc_id, update).await {
+                    #[allow(unused)]
+                    tx.send(Message::from(
+                        json!({
+                            "err":e.error
+                        })
+                        .to_string(),
+                    ))
+                    .await;
+                };
             }
-            Err(e) => {
-                log::error!("{}",e);
-                tx.send(Message::text(e.to_string())).await.unwrap();
-                return;
+            None => {
+                #[allow(unused)]
+                tx.send(Message::Text(
+                    json!({
+                        "err":"An error occurred",
+                    })
+                    .to_string()
+                    .into(),
+                ));
             }
         };
     }
 
     readloop.abort();
 
-    if let Some(_) = clients.lock().await.remove(&user_id) {
+    if let Some(_) = docs.lock().await.remove(*user_id) {
         log::debug!("{} disconnected", user_id);
     }
 }

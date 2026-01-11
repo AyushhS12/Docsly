@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     Extension, Json, RequestExt,
-    extract::Request,
+    extract::{Query, Request},
     http::{StatusCode, request::Parts},
     response::IntoResponse,
 };
@@ -11,9 +11,28 @@ use tower_cookies::Cookies;
 
 use crate::{
     db::Db,
-    models::{Author, Doc, IntoObjectId},
+    models::{Author, Doc, DocQuery},
     utils::{self, extract_cookies},
 };
+
+pub async fn get_doc(
+    Query(params): Query<DocQuery>,
+    Extension(db): Extension<Arc<Db>>,
+) -> impl IntoResponse {
+    let res = db.find_doc_with_id(params.id).await;
+    match res {
+        Ok(d) => (StatusCode::OK, Json(d)).into_response(),
+        Err(e) => {
+            log::error!("{}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"err":"Document not found"})),
+            )
+                .into_response()
+        }
+    }
+}
+
 pub async fn get_docs(Extension(db): Extension<Arc<Db>>, mut req: Request) -> impl IntoResponse {
     let parts = req.extract_parts::<Parts>().await.unwrap();
     let claims = extract_cookies(&parts).await.unwrap();

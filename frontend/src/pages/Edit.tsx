@@ -4,26 +4,39 @@ import { FileText, Share2, Save, MoreVertical, Bold, Italic, Underline, List, Li
 import { useNavigate, useParams } from 'react-router-dom';
 // import toast from 'react-hot-toast';
 import useAuthGuard from '../context/auth/useAuthGuard';
+import { applyRemoteUpdate, type DeleteUpdate, type Doc, type InsertUpdate, type User } from '../lib/utils';
+import { useBatchUpdates } from '../lib/batchUpdate';
+import api from '../lib/api';
 
 export default function Edit() {
   const [content, setContent] = useState('');
-  const [title, setTitle] = useState('Untitled Document');
-  const [isConnected, setIsConnected] = useState(false);
+  const [title, setTitle] = useState("Untitled Document")
   const [isSaving, setIsSaving] = useState(false);
+  const [isConnected, setIsConnected] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [collaborators, _setCollaborators] = useState([
-    { id: 1, name: 'You', color: 'from-purple-500 to-pink-500', active: true },
-    { id: 2, name: 'Sarah Chen', color: 'from-blue-500 to-cyan-500', active: true },
-    { id: 3, name: 'Alex Kim', color: 'from-green-500 to-emerald-500', active: false },
-  ]);
-  const {guard} = useAuthGuard()
+  const [collaborators, _setCollaborators] = useState<User[]>([]);
+  const { guard } = useAuthGuard()
   const wsRef = useRef<WebSocket | null>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const lastContentRef = useRef('');
   const cursorPositionRef = useRef(0);
   const navigate = useNavigate()
   const { docId } = useParams<{ docId: string }>()
+
+  const fetchDoc = useCallback(async() => {
+    const res = await api.get<Doc>("/doc/get_doc?id="+docId)
+    setTitle(res.data.title)
+    setContent(res.data.content)
+  },[docId])
+
+  useEffect(()=>{
+    const f = ()=>{
+      fetchDoc()
+    }
+    f()
+  },[fetchDoc])
+
   // Initialize WebSocket connection
   const connectWebSocket = useCallback(async () => {
     try {
@@ -32,6 +45,9 @@ export default function Edit() {
         console.log("Connected to Websocket");
         setIsConnected(true);
       }
+      ws.onerror = (e) => {
+        console.log(e)
+      }
       ws.onclose = (e) => {
         console.log("Connection Closed")
         console.log("Connecting to websocket again in 2 seconds")
@@ -39,20 +55,17 @@ export default function Edit() {
         // setTimeout(connectWebSocket,2000)
       }
       ws.onmessage = (msg) => {
-        
+        console.log(msg.data)
+        const update = JSON.parse(msg.data) as InsertUpdate | DeleteUpdate
+        setContent(prev => applyRemoteUpdate(prev,update))
       }
-      // Simulate receiving remote updates
-      const simulateRemoteUpdates = setInterval(() => {
-        // This simulates other users' edits
-        // In production, this would be real WebSocket messages
-      }, 5000);
-
-      return () => clearInterval(simulateRemoteUpdates);
+      wsRef.current = ws;
     } catch (error) {
       console.error('WebSocket connection error:', error);
       setIsConnected(false);
     }
   }, [docId])
+
   useEffect(() => {
     guard()
     const ws = () => {
@@ -65,17 +78,104 @@ export default function Edit() {
       }
     };
   }, [connectWebSocket, guard, navigate]);
-  const sendUpdate = useCallback((update: Record<string, unknown>) => {
+  const sendUpdate = useCallback((update: InsertUpdate | DeleteUpdate) => {
     if (isConnected) {
       console.log('Sending update to WebSocket:', update);
-
+      wsRef.current?.send(JSON.stringify(update));
     }
   }, [isConnected])
+
+  //Batch Updates
+  const { queueUpdate } = useBatchUpdates(sendUpdate)
+
+  // Debounced SendUpdate
+  // const pendingInsertRef = useRef<string>("");
+  // const pendingDeleteRef = useRef<number>(0);
+  // const startPositionRef = useRef<number | null>(null);
+  // const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // const sendUpdateBatch = useCallback((update: InsertUpdate | DeleteUpdate) => {
+  //   // Set start position only once per batch
+  //   if (startPositionRef.current === null) {
+  //     startPositionRef.current = update.position;
+  //   }
+  //   // Merge updates
+  //   if (update.type.update === "insert") {
+  //     pendingInsertRef.current += update.type.data;
+  //   }
+
+  //   if (update.type.update === "delete") {
+  //     pendingDeleteRef.current += update.type.length;
+  //   }
+
+  //   // Reset debounce timer
+  //   if (debounceTimerRef.current) {
+  //     clearTimeout(debounceTimerRef.current);
+  //   }
+
+  //   debounceTimerRef.current = setTimeout(() => {
+  //     // Send INSERT batch
+  //     if (pendingInsertRef.current.length > 0) {
+  //       sendUpdate({
+  //         position: startPositionRef.current!,
+  //         type: {
+  //           update: "insert",
+  //           data: pendingInsertRef.current
+  //         },
+  //         timestamp: new Date().toISOString()
+  //       });
+  //     }
+
+  //     // Send DELETE batch
+  //     if (pendingDeleteRef.current > 0) {
+  //       sendUpdate({
+  //         position: startPositionRef.current!,
+  //         type: {
+  //           update: "delete",
+  //           length: pendingDeleteRef.current
+  //         },
+  //         timestamp: new Date().toISOString()
+  //       });
+  //     }
+
+  //     // Reset batch state
+  //     pendingInsertRef.current = "";
+  //     pendingDeleteRef.current = 0;
+  //     startPositionRef.current = null;
+  //     debounceTimerRef.current = null;
+  //   }, 3000);
+  // },[sendUpdate])
+
+
+  //Delete Function
+  const createDeleteUpdate = useCallback((
+    oldContent: string,
+    newContent: string,
+  ) => {
+    let start = 0;
+    while (
+      start < newContent.length &&
+      oldContent[start] === newContent[start]
+    ) {
+      start++;
+    }
+
+    const deletedLength = oldContent.length - newContent.length;
+
+    const update: DeleteUpdate = {
+      position: start,
+      type: {
+        update: "delete",
+        length: deletedLength
+      },
+      timestamp: (new Date()).toISOString()
+    };
+    queueUpdate(update);
+  },[queueUpdate])
 
   // Handle content changes and send to WebSocket
   const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
-    const oldContent = lastContentRef.current;
+    const oldContent = content;
     const cursorPosition = e.target.selectionStart;
 
     // Detect changes
@@ -83,39 +183,28 @@ export default function Edit() {
       // Insertion detected
       const insertedText = newContent.slice(oldContent.length > 0 ? cursorPosition - (newContent.length - oldContent.length) : 0, cursorPosition);
       const insertPosition = cursorPosition - insertedText.length;
-
-      sendUpdate({
-        type: 'insert',
+      const update: InsertUpdate = {
         position: insertPosition,
-        text: insertedText,
-        timestamp: "",
-        userId: 'current-user-id'
-      });
+        type: {
+          update: 'insert',
+          data: insertedText
+        },
+        timestamp: (new Date()).toISOString()
+      }
+      queueUpdate(update)
     } else if (newContent.length < oldContent.length) {
       // Deletion detected
-      const deletePosition = cursorPosition;
-      const deletedLength = oldContent.length - newContent.length;
-
-      sendUpdate({
-        type: 'delete',
-        position: deletePosition,
-        length: deletedLength,
-        timestamp: "",
-        userId: 'current-user-id'
-      });
+      createDeleteUpdate(oldContent, newContent)
     }
 
-    setContent(newContent);
     lastContentRef.current = newContent;
+    setContent(newContent);
     cursorPositionRef.current = cursorPosition;
 
     // Simulate auto-save
     setIsSaving(true);
     setTimeout(() => setIsSaving(false), 1000);
-  }, [sendUpdate])
-
-  // Send updates to WebSocket
-
+  }, [content, createDeleteUpdate, queueUpdate])
 
   const formatText = (command: string) => {
     // Placeholder for text formatting
@@ -167,12 +256,12 @@ export default function Edit() {
             <div className="flex -space-x-2">
               {collaborators.map((collab) => (
                 <div
-                  key={collab.id}
-                  className={`w-8 h-8 rounded-full bg-linear-to-br ${collab.color} flex items-center justify-center text-white text-xs font-semibold border-2 border-white relative group cursor-pointer`}
+                  key={collab.id.$oid}
+                  className={`w-8 h-8 rounded-full bg-linear-to-br flex items-center justify-center text-white text-xs font-semibold border-2 border-white relative group cursor-pointer`}
                   title={collab.name}
                 >
                   {collab.name.charAt(0)}
-                  {collab.active && (
+                  {collab && (
                     <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
                   )}
                 </div>

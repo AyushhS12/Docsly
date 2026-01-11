@@ -14,7 +14,8 @@ pub fn doc_routes() -> Router{
     let router = Router::new()
         .route("/edit/{id}", get(edit::edit))
         .route("/get_docs", get(docs::get_docs))
-        .route("/create", post(docs::create));
+        .route("/create", post(docs::create))
+        .route("/get_doc", get(docs::get_doc));
     router
 }
 pub fn user_routes() -> Router{

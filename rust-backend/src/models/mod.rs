@@ -1,7 +1,8 @@
-use axum::extract::ws::Message;
+use axum::extract::ws::{self, Message};
 use chrono::Utc;
 use mongodb::bson::{DateTime, oid::ObjectId};
 use serde::{Deserialize, Serialize};
+use serde_json::{from_str, to_string};
 use std::{collections::HashMap, fmt::Display, str::FromStr, sync::Arc};
 use tokio::sync::{Mutex, mpsc::Sender};
 
@@ -20,6 +21,21 @@ impl IntoObjectId for ObjectId {
         *self
     }
 }
+
+impl IntoObjectId for &str{
+    fn into_objetc_id(&self) -> ObjectId {
+        ObjectId::from_str(self).unwrap()
+    }
+}
+
+impl IntoObjectId for Arc<&str>{
+    fn into_objetc_id(&self) -> ObjectId {
+        ObjectId::from_str(self).unwrap()
+    }
+}
+
+pub type DocsMap = Arc<Mutex<HashMap<String, Vec<Client>>>>;
+pub type BufferMap = Arc<Mutex<HashMap<String, Sender<Update>>>>;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct LoginUser {
@@ -64,6 +80,7 @@ pub enum DocType {
     MeetingDocs,
     DataTable,
     Essay,
+    Folder(Folder),
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -89,63 +106,100 @@ pub struct Author {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum UpdateType{
-    Insert{
-        data:String
-    },
-    Delete{
-        length:usize
-    }
-} 
+#[serde(rename_all = "lowercase", tag = "update")]
+pub enum UpdateType {
+    Insert { data: String },
+    Delete { length: usize },
+}
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Update {
-    pub update: String,
     pub position: usize,
-    pub from: ObjectId,
+    pub from: Option<ObjectId>,
     #[serde(rename = "type")]
-    pub update_type:UpdateType,
-    pub timestamp: chrono::DateTime<Utc>
+    pub update_type: UpdateType,
+    pub timestamp: Option<chrono::DateTime<Utc>>,
 }
 
-// impl Display for WsEvents{
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match Self {
-//             Self::Delete(d) =>{
-
-//             }
-//         }
-//         write!(f,"Message : {{\n type: {},\ndata: {}\n }}",Self::Delete())
-//     }
-// }
-
-pub type ClientsMap = Arc<Mutex<HashMap<String, Client>>>;
+impl From<Update> for ws::Message {
+    fn from(value: Update) -> Self {
+        match to_string(&value) {
+            Ok(data) => Message::text(data),
+            Err(e) => {
+                log::error!("{}", e);
+                panic!("cannot convert to Message")
+            }
+        }
+    }
+}
+impl From<ws::Message> for Update {
+    fn from(value: ws::Message) -> Self {
+        let data = from_str::<Update>(value.to_text().unwrap());
+        match data {
+            Ok(u) => u,
+            Err(e) => {
+                log::error!("{}", e);
+                panic!("cannot convert to Message")
+            }
+        }
+    }
+}
 
 pub struct Client {
+    pub id: String,
     pub sender: Sender<Message>,
+    pub author: bool,
 }
 
 impl Client {
-    pub fn new(sender: Sender<Message>) -> Client {
-        Client { sender }
-    }
-}
-
-#[derive(Clone)]
-pub struct DocState {
-    pub author: ObjectId,
-    pub users: Vec<String>,
-}
-pub type DocStateMap = Arc<Mutex<HashMap<String, DocState>>>;
-
-impl DocState {
-    pub fn new(author: ObjectId, ref mut users: Vec<String>) -> DocState {
-        DocState {
-            author,
-            users: users.to_vec(),
+    pub fn new(id: impl IntoObjectId, sender: Sender<Message>) -> Client {
+        Client {
+            id: id.into_objetc_id().to_hex(),
+            sender,
+            author: false,
         }
     }
+}
+
+
+macro_rules! impl_error {
+    ($($t:ty), + $(,)?) => {
+        $(
+            impl From<$t> for Error{
+                fn from(value: $t) -> Self {
+                    Error { error: value.to_string() }
+                }
+            }
+        )+
+    };
+}
+#[derive(Debug)]
+pub struct Error {
+    pub error: String,
+}
+
+impl std::error::Error for Error {}
+
+impl Error {
+    pub fn new<T: ToString>(v: T) -> Self {
+        Error {
+            error: v.to_string(),
+        }
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.error)
+    }
+}
+
+impl_error! {
+    mongodb::error::Error,
+    argon2::password_hash::Error,
+    axum::Error,
+    String,
+    &str
 }
 
 // JWT Claims
@@ -159,4 +213,9 @@ impl Claims {
     pub fn new(sub: String, exp: u64) -> Self {
         Claims { sub, exp }
     }
+}
+
+#[derive(Serialize,Deserialize,Clone)]
+pub struct DocQuery{
+    pub id:String
 }

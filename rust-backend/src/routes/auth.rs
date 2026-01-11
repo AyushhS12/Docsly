@@ -11,7 +11,7 @@ use tower_cookies::{
 use crate::{
     db::Db,
     models::{Claims, LoginUser, User},
-    utils::decode_cookie,
+    utils::{self, decode_cookie},
 };
 
 pub async fn login(
@@ -23,51 +23,64 @@ pub async fn login(
     if let Ok(v) = env::var("ENV") {
         env = v
     };
-    if let Some(cookie) = cookies.get("token") {
-        if let Some(claims) = decode_cookie(cookie.clone()).await {
-            if !claims.sub.is_empty() {
-                return (
+    match db.find_user(&user).await {
+        Ok(u) => match utils::verify_password_hash(&user.password, &u.password) {
+            Ok(()) => {
+                // check if cookies already exist 
+                if let Some(cookie) = cookies.get("token") {
+                    if let Some(claims) = decode_cookie(cookie.clone()).await {
+                        if !claims.sub.is_empty() {
+                            return (
+                                StatusCode::OK,
+                                Json(json!({
+                                    "token":cookie.value(),
+                                    "success":true
+                                })),
+                            );
+                        }
+                    }
+                }
+                let exp = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+                    + 2592000;
+                let claims = Claims::new(u.id.unwrap().to_hex(), exp);
+                let key = &EncodingKey::from_secret("hello".as_ref());
+                let token = encode(&Header::default(), &claims, key);
+                let t = token.unwrap().to_string();
+                let cookie = Cookie::new("token", t.clone());
+                let (secure, same_site) = if env.as_str() == "prod" {
+                    (true, SameSite::None)
+                } else {
+                    (false, SameSite::Lax)
+                };
+                let final_cookie = CookieBuilder::from(cookie)
+                    .http_only(true)
+                    .secure(secure)
+                    .same_site(same_site)
+                    .path("/")
+                    .build();
+                cookies.add(final_cookie);
+                (
                     StatusCode::OK,
                     Json(json!({
-                        "token":cookie.to_string().split_once("=").unwrap().1,
+                        "token":t,
                         "success":true
                     })),
-                );
+                )
             }
-        }
-    }
-    match db.find_user(user).await {
-        Ok(u) => {
-            let exp = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                + 2592000;
-            let claims = Claims::new(u.id.unwrap().to_hex(), exp);
-            let key = &EncodingKey::from_secret("hello".as_ref());
-            let token = encode(&Header::default(), &claims, key);
-            let t = token.unwrap().to_string();
-            let cookie = Cookie::new("token", t.clone());
-            let (secure, same_site) = if env.as_str() == "prod" {
-                (true, SameSite::None)
-            } else {
-                (false, SameSite::Lax)
-            };
-            let final_cookie = CookieBuilder::from(cookie)
-                .http_only(true)
-                .secure(secure)
-                .same_site(same_site)
-                .path("/")
-                .build();
-            cookies.add(final_cookie);
-            (
-                StatusCode::OK,
-                Json(json!({
-                    "token":t,
-                    "success":true
-                })),
-            )
-        }
+            Err(e) => {
+                log::error!("{}", e);
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(json!({
+                        "success":false,
+                        "err":"Incorrect credentials"
+                    })),
+                )
+            }
+        },
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({

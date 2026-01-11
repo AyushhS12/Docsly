@@ -5,28 +5,10 @@ import axios from 'axios';
 import CreateNewPopup from '../components/CreateNewPopUp';
 import api from '../lib/api';
 import toast, { ErrorIcon } from 'react-hot-toast';
-import DocumentOptionsDropdown from '../components/DocumentOptionsDropDown';
 import { useNavigate } from 'react-router-dom';
+import DocumentOptionsDropdown from '../components/DocumentOptionsDropdown';
+import type { Doc } from '../lib/utils';
 
-interface Id {
-  $oid: string
-}
-
-interface Author {
-  id: Id,
-  name: string,
-}
-
-interface Doc {
-  _id: Id,
-  author: Author,
-  collaborators: Id[],
-  title: string,
-  content: string,
-  type: string,
-  starred: boolean,
-  last_update: string
-}
 
 export default function Dashboard() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -38,12 +20,21 @@ export default function Dashboard() {
 
   const [isCreatePopupOpen, setIsCreatePopupOpen] = useState(false);
 
+
+  const getUserDocs = useCallback(async () => {
+    const res = await axios.get<{ docs: Doc[] }>("/api/doc/get_docs", { withCredentials: true })
+    if (res.data) {
+      setDocs(res.data.docs)
+      console.log(res.data.docs)
+    }
+  }, [])
+
   const onCreate = useCallback(async (type: string, name: string) => {
     const toastId = toast.loading("Creating Document... Please wait")
     try {
       const res = await api.post<{ success: boolean, message: string }>("/doc/create", { title: name, type })
       if (res.data.success) {
-        console.log("here")
+        getUserDocs()
         setTimeout(() => {
           toast.success(res.data.message, {
             id: toastId,
@@ -64,15 +55,9 @@ export default function Dashboard() {
         }, 1000)
       })
     }
-  }, [])
+  }, [getUserDocs])
 
-  const getUserDocs = useCallback(async () => {
-    const res = await axios.get<{ docs: Doc[] }>("/api/doc/get_docs", { withCredentials: true })
-    if (res.data) {
-      setDocs(res.data.docs)
-      console.log(res.data.docs)
-    }
-  }, [])
+  
   useEffect(() => {
     const init = async () => {
       await guard()
@@ -247,6 +232,7 @@ export default function Dashboard() {
               {filteredDocs.map((doc) => (
                 <div
                   key={doc._id.$oid}
+                  onClick={()=>{navigate("/doc/edit/"+doc._id.$oid,{state:doc})}}
                   className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border-2 border-purple-100 hover:border-purple-300 hover:shadow-xl transform hover:-translate-y-1 transition-all cursor-pointer group"
                 >
                   <div className="flex items-start justify-between mb-4">

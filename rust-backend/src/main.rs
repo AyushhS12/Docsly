@@ -11,7 +11,7 @@ use tokio::{net::TcpListener, sync::Mutex};
 use tower_cookies::CookieManagerLayer;
 use tower_http::cors::CorsLayer;
 
-use crate::db::Db;
+use crate::{db::Db, models::BufferMap};
 mod db;
 mod middleware;
 mod models;
@@ -47,13 +47,13 @@ pub async fn main() {
         .allow_headers([CONTENT_TYPE, AUTHORIZATION])
         .allow_credentials(true);
     let db = Arc::new(Db::init().await);
-    let clients: models::ClientsMap = Arc::new(Mutex::new(HashMap::new()));
-    let doc_states: models::DocStateMap = Arc::new(Mutex::new(HashMap::new()));
+    let docs_map: models::DocsMap = Arc::new(Mutex::new(HashMap::new()));
+    let buffer_map: BufferMap = Arc::new(Mutex::new(HashMap::new()));
     let router = Router::new();
     let app = manage_routes(router)
         .layer(Extension(db))
-        .layer(Extension(clients))
-        .layer(Extension(doc_states))
+        .layer(Extension(docs_map))
+        .layer(Extension(buffer_map))
         .layer(cors)
         .layer(CookieManagerLayer::new());
 
