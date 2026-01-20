@@ -3,7 +3,7 @@ use std::{collections::HashMap, env, sync::Arc};
 use axum::{
     Extension, Router,
     http::{
-        HeaderValue, Method,
+        Method,
         header::{AUTHORIZATION, CONTENT_TYPE},
     },
 };
@@ -19,8 +19,8 @@ mod routes;
 mod utils;
 #[tokio::main]
 pub async fn main() {
-    if let Ok(env) = env::var("ENV"){
-        if env == "PROD"{
+    if let Ok(env) = env::var("ENV") {
+        if env == "PROD" {
             println!("Production environment detected")
         } else if env == "DEV" {
             dotenv::dotenv().ok().unwrap();
@@ -42,7 +42,10 @@ pub async fn main() {
     log::info!("Server listening on http://{}", address);
     let listener = TcpListener::bind(address).await.unwrap();
     let cors = CorsLayer::new()
-        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+        .allow_origin([
+            "http://localhost:5173".parse().unwrap(),
+            "https://docsly-smoky.vercel.app".parse().unwrap(),
+        ])
         .allow_methods([
             Method::GET,
             Method::POST,
