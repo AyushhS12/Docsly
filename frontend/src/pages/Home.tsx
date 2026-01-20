@@ -1,22 +1,19 @@
 import { useState, useEffect } from 'react';
 import { FileText, Users, Zap, Globe, Check, ArrowRight, Sparkles } from 'lucide-react';
-import useAuthGuard from '../context/auth/useAuthGuard';
 import { useNavigate } from 'react-router-dom';
 
 export default function DocslyLanding() {
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
     const [isVisible, setIsVisible] = useState(false);
-    const {guard} = useAuthGuard()
     const navigate = useNavigate()
     useEffect(() => {
-        guard()
         const handleMouseMove = async (e: MouseEvent) => {
             setIsVisible(true)
             setCursorPos({ x: e.clientX, y: e.clientY });
         };
         window.addEventListener('mousemove', handleMouseMove);
         return () => window.removeEventListener('mousemove', handleMouseMove);
-    }, [guard, navigate]);
+    }, [navigate]);
 
     const features = [
         { icon: <Zap className="w-6 h-6" />, title: "Real-time Editing", desc: "See changes instantly as you and your team type" },
