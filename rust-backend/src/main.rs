@@ -19,7 +19,13 @@ mod routes;
 mod utils;
 #[tokio::main]
 pub async fn main() {
-    dotenv::dotenv().ok().unwrap();
+    if let Ok(env) = env::var("ENV"){
+        if env == "PROD"{
+            println!("Production environment detected")
+        } else if env == "DEV" {
+            dotenv::dotenv().ok().unwrap();
+        }
+    }
     env_logger::init();
     let env_port = env::var("PORT");
     let address: String;
