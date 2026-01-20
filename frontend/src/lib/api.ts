@@ -1,8 +1,5 @@
 import axios from "axios";
 
-const baseUrl = import.meta.env.VITE_BACKEND_URL
-const url = baseUrl===undefined||baseUrl==""?"/api":baseUrl
-
-const api = axios.create({baseURL:url,withCredentials:true})
+const api = axios.create({baseURL:"/api",withCredentials:true})
 
 export default api 
