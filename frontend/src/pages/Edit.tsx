@@ -7,6 +7,7 @@ import useAuthGuard from '../context/auth/useAuthGuard';
 import { applyRemoteUpdate, type DeleteUpdate, type Doc, type InsertUpdate, type User } from '../lib/utils';
 import { useBatchUpdates } from '../lib/batchUpdate';
 import api from '../lib/api';
+const baseUrl = import.meta.env.VITE_BACKEND_URL as string
 
 export default function Edit() {
   const [content, setContent] = useState('');
@@ -24,23 +25,29 @@ export default function Edit() {
   const navigate = useNavigate()
   const { docId } = useParams<{ docId: string }>()
 
-  const fetchDoc = useCallback(async() => {
-    const res = await api.get<Doc>("/doc/get_doc?id="+docId)
+  const fetchDoc = useCallback(async () => {
+    const res = await api.get<Doc>("/doc/get_doc?id=" + docId)
     setTitle(res.data.title)
     setContent(res.data.content)
-  },[docId])
+  }, [docId])
 
-  useEffect(()=>{
-    const f = ()=>{
+  useEffect(() => {
+    const f = () => {
       fetchDoc()
     }
     f()
-  },[fetchDoc])
+  }, [fetchDoc])
 
   // Initialize WebSocket connection
   const connectWebSocket = useCallback(async () => {
     try {
-      const ws = new WebSocket("/api/doc/edit/" + docId);
+      let url = ""
+      if (import.meta.env.VITE_ENV === "prod") {
+        url = "wss://"+ baseUrl.split("//")[1] +"/api/doc/edit/";
+      } else {
+        url = "ws://localhost:7878/api/doc/edit/"
+      }
+      const ws = new WebSocket(url + docId);
       ws.onopen = (_) => {
         console.log("Connected to Websocket");
         setIsConnected(true);
@@ -57,7 +64,7 @@ export default function Edit() {
       ws.onmessage = (msg) => {
         console.log(msg.data)
         const update = JSON.parse(msg.data) as InsertUpdate | DeleteUpdate
-        setContent(prev => applyRemoteUpdate(prev,update))
+        setContent(prev => applyRemoteUpdate(prev, update))
       }
       wsRef.current = ws;
     } catch (error) {
@@ -170,7 +177,7 @@ export default function Edit() {
       timestamp: (new Date()).toISOString()
     };
     queueUpdate(update);
-  },[queueUpdate])
+  }, [queueUpdate])
 
   // Handle content changes and send to WebSocket
   const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
