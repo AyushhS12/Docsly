@@ -106,7 +106,6 @@ pub async fn signup(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({
-                "route":"signup",
                 "success":false,
                 "err":e.to_string()
             })),

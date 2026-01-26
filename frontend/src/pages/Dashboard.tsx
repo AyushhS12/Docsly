@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FileText, Plus, Upload, Edit3, Search, Filter, MoreVertical, Clock, Users, Star, Share2, Download, FolderOpen, Grid, List, Bell, Settings, User, LogOut, CheckCircle } from 'lucide-react';
 import useAuthGuard from '../context/auth/useAuthGuard';
-import axios from 'axios';
 import CreateNewPopup from '../components/CreateNewPopUp';
 import api from '../lib/api';
 import toast, { ErrorIcon } from 'react-hot-toast';
@@ -22,7 +21,7 @@ export default function Dashboard() {
 
 
   const getUserDocs = useCallback(async () => {
-    const res = await axios.get<{ docs: Doc[] }>("/api/doc/get_docs", { withCredentials: true })
+    const res = await api.get<{ docs: Doc[] }>("/doc/get_docs", { withCredentials: true })
     if (res.data) {
       setDocs(res.data.docs)
       console.log(res.data.docs)

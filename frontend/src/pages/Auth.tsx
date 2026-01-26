@@ -47,13 +47,12 @@ export default function DocslyAuth() {
           //
         }
       } else {
+        toast.loading("Creating account...", {
+          id: toastId,
+          icon: <Loader2 className="animate-spin" />,
+        })
         const res = await api.post<{ success: boolean }>("/auth/signup", formData)
         if (res.data.success) {
-          toast.loading("Creating account...", {
-            id:toastId,
-            icon: <Loader2 className="animate-spin" />,
-          })
-
           setTimeout(() => {
             toast.success("Account created successfully", {
               id: toastId,
