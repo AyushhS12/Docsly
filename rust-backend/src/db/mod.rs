@@ -233,7 +233,7 @@ impl Db {
                 match doc {
                     Ok(Some(document)) => {
                         let pos = update.position;
-                        let new_data = document.content[..pos].to_owned() + &document.content[(pos+length)..];
+                        let new_data = document.content[..pos].to_owned() + &document.content[(pos+length)-1..];
                         let res = self
                             .docs
                             .update_one(
