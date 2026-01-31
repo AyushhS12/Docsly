@@ -15,6 +15,8 @@ pub fn doc_routes() -> Router{
         .route("/edit/{id}", get(edit::edit))
         .route("/get_docs", get(docs::get_docs))
         .route("/create", post(docs::create))
+        .route("/collab/{doc_id}", get(docs::collab_request))
+        .route("/get_collab_requests", get(docs::get_collab_requests))
         .route("/get_doc", get(docs::get_doc));
     router
 }

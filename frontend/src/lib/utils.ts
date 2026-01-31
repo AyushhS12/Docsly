@@ -40,6 +40,13 @@ export interface LocationState{
   state:Doc
 }
 
+export interface CollabRequest{
+  _id: Id,
+  from:Id,
+  doc:Id,
+  timestamp:string
+}
+
 
 export function applyRemoteUpdate(
   content: string,

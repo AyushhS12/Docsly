@@ -4,6 +4,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Edit from "./pages/Edit";
 import NotFoundWithoutAuth from "./pages/NotFoundWithoutAuth";
+import { Collab } from "./pages/Collab";
 
 const App = () => {
     return (<>
@@ -12,6 +13,7 @@ const App = () => {
             <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/doc/edit/:docId" element={<Edit />} />
+            <Route path="/doc/collab/:docId" element={<Collab />} />
             <Route path="/:slug" element={<NotFoundWithoutAuth />} />
         </Routes>
     </>)

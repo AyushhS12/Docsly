@@ -1,9 +1,10 @@
 use axum::extract::ws::{self, Message};
+use bson::Binary;
 use chrono::Utc;
 use mongodb::bson::{DateTime, oid::ObjectId};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
-use std::{collections::HashMap, fmt::Display, str::FromStr, sync::Arc};
+use std::{collections::HashMap, fmt::Display, str::{self, FromStr}, sync::Arc};
 use tokio::sync::{Mutex, mpsc::Sender};
 
 pub trait IntoObjectId {
@@ -22,13 +23,13 @@ impl IntoObjectId for ObjectId {
     }
 }
 
-impl IntoObjectId for &str{
+impl IntoObjectId for &str {
     fn into_objetc_id(&self) -> ObjectId {
         ObjectId::from_str(self).unwrap()
     }
 }
 
-impl IntoObjectId for Arc<&str>{
+impl IntoObjectId for Arc<&str> {
     fn into_objetc_id(&self) -> ObjectId {
         ObjectId::from_str(self).unwrap()
     }
@@ -88,7 +89,7 @@ pub struct Doc {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
     pub author: Option<Author>,
-    pub collaborators: Option<Vec<ObjectId>>,
+    pub collaborators: Vec<ObjectId>,
     pub title: String,
     #[serde(default)]
     pub content: String,
@@ -106,6 +107,23 @@ pub struct Author {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct UploadedDoc{
+    #[serde(rename = "_id",skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
+    pub owner: ObjectId,
+    pub filename: String,
+    pub content_type: String,
+    pub size: usize,
+    pub data: Binary
+}
+
+impl UploadedDoc{
+    pub fn new(owner: impl IntoObjectId, filename: String, content_type: String, size: usize, data: Binary) -> Self{
+        Self { id: None, owner:owner.into_objetc_id(), filename, content_type, size, data }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "lowercase", tag = "update")]
 pub enum UpdateType {
     Insert { data: String },
@@ -119,6 +137,28 @@ pub struct Update {
     #[serde(rename = "type")]
     pub update_type: UpdateType,
     pub timestamp: Option<chrono::DateTime<Utc>>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct CollabRequest {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
+    pub author:ObjectId,
+    pub from: ObjectId,
+    pub doc: ObjectId,
+    pub timestamp: chrono::DateTime<Utc>,
+}
+
+impl CollabRequest {
+    pub fn new(author: ObjectId,from: ObjectId, doc: ObjectId) -> Self {
+        Self {
+            id: None,
+            author,
+            from,
+            doc,
+            timestamp: DateTime::now().into(),
+        }
+    }
 }
 
 impl From<Update> for ws::Message {
@@ -160,7 +200,6 @@ impl Client {
         }
     }
 }
-
 
 macro_rules! impl_error {
     ($($t:ty), + $(,)?) => {
@@ -215,7 +254,7 @@ impl Claims {
     }
 }
 
-#[derive(Serialize,Deserialize,Clone)]
-pub struct DocQuery{
-    pub id:String
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DocQuery {
+    pub id: String,
 }

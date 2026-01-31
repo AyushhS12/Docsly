@@ -2,23 +2,66 @@ import { useCallback, useEffect, useState } from 'react';
 import { FileText, Plus, Upload, Edit3, Search, Filter, MoreVertical, Clock, Users, Star, Share2, Download, FolderOpen, Grid, List, Bell, Settings, User, LogOut, CheckCircle } from 'lucide-react';
 import useAuthGuard from '../context/auth/useAuthGuard';
 import CreateNewPopup from '../components/CreateNewPopUp';
-import api from '../lib/api';
+import api, { BaseUrl } from '../lib/api';
 import toast, { ErrorIcon } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import DocumentOptionsDropdown from '../components/DocumentOptionsDropdown';
-import type { Doc } from '../lib/utils';
+import type { CollabRequest, Doc } from '../lib/utils';
+import CollabRequestsDropdown from '../components/CollabRequestDropdown';
 
 
 export default function Dashboard() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showRequests, setShowRequests] = useState(false);
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [requests, setRequests] = useState<CollabRequest[]>();
   const { guard, logout } = useAuthGuard()
   const navigate = useNavigate()
 
   const [isCreatePopupOpen, setIsCreatePopupOpen] = useState(false);
 
+  //Upload states
+  const [isUploadPopupOpen, setIsUploadPopupOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+
+  const shareDoc = (id: string) => {
+    const toastId = toast.loading("Copying link...")
+    try {
+      let shareLink;
+      if (BaseUrl === "") {
+        shareLink = "http://localhost:5173/doc/collab/" + id;
+      } else {
+        shareLink = BaseUrl + "/doc/collab/" + id;
+      }
+      navigator.clipboard.writeText(shareLink)
+      setTimeout(() => {
+        toast.success("Link copied to clipboard", {
+          id: toastId,
+          icon: <CheckCircle className="text-green-500" />,
+          duration: 900,
+        })
+      }, 1500)
+    } catch (e) {
+      console.log(e)
+      toast.error("An error occurred", {
+        id: toastId,
+        icon: <ErrorIcon className="text-red-500" />,
+        duration: 900,
+      })
+    }
+  }
+
+  const getCollabRequests = async () => {
+    try {
+      const res = await api.get<{ requests: CollabRequest[] }>("/doc/get_collab_requests");
+      setRequests(res.data.requests)
+    } catch (e) {
+      console.log(e)
+    }
+  }
 
   const getUserDocs = useCallback(async () => {
     const res = await api.get<{ docs: Doc[] }>("/doc/get_docs", { withCredentials: true })
@@ -56,17 +99,52 @@ export default function Dashboard() {
     }
   }, [getUserDocs])
 
-  
+
   useEffect(() => {
     const init = async () => {
       await guard()
       await getUserDocs()
+      await getCollabRequests()
     }
     init()
   }, [guard, getUserDocs])
 
   const toggleStar = (id: string) => {
     setDocs(docs.map(doc => doc._id.$oid === id ? { ...doc, starred: !doc.starred } : doc));
+  };
+
+  const uploadFile = async () => {
+    if (!selectedFile) return;
+
+    const toastId = toast.loading("Uploading file...");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      await api.post("/doc/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        withCredentials: true,
+      });
+
+      toast.success("File uploaded successfully", {
+        id: toastId,
+        icon: <CheckCircle className="text-green-500" />,
+        duration: 1500,
+      });
+
+      setIsUploadPopupOpen(false);
+      setSelectedFile(null);
+      getUserDocs(); // refresh list
+    } catch (e) {
+      console.error(e);
+      toast.error("Upload failed", {
+        id: toastId,
+        duration: 1500,
+      });
+    }
   };
 
   const filteredDocs = docs.filter(doc =>
@@ -81,6 +159,53 @@ export default function Dashboard() {
         onClose={() => setIsCreatePopupOpen(false)}
         onCreate={onCreate}
       />
+      {isUploadPopupOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold mb-4 text-gray-800">
+              Upload File
+            </h2>
+
+            <input
+              type="file"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+              className="w-full mb-4 file:mr-4 file:py-2 file:px-4
+          file:rounded-lg file:border-0
+          file:bg-purple-600 file:text-white
+          hover:file:bg-purple-700
+          cursor-pointer"
+            />
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setIsUploadPopupOpen(false);
+                  setSelectedFile(null);
+                }}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+
+              <button
+                disabled={!selectedFile}
+                onClick={() => {
+                  uploadFile()
+                  setIsUploadPopupOpen(false);
+                }}
+                className={`px-4 py-2 rounded-lg text-white font-semibold transition
+            ${selectedFile
+                    ? "bg-purple-600 hover:bg-purple-700"
+                    : "bg-gray-400 cursor-not-allowed"
+                  }`}
+              >
+                Upload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 h-full w-64 bg-white/80 backdrop-blur-sm border-r border-purple-100 shadow-lg z-20">
         <div className="p-6">
@@ -100,10 +225,14 @@ export default function Dashboard() {
               <Plus className="w-5 h-5" />
               <span className="font-semibold">Create New</span>
             </button>
-            <button className="w-full flex items-center space-x-3 px-4 py-3 bg-white border-2 border-purple-200 text-purple-600 rounded-xl hover:border-purple-400 hover:shadow-md transition-all group">
+            <button
+              onClick={() => setIsUploadPopupOpen(true)}
+              className="w-full flex items-center space-x-3 px-4 py-3 bg-white border-2 border-purple-200 text-purple-600 rounded-xl hover:border-purple-400 hover:shadow-md transition-all group"
+            >
               <Upload className="w-5 h-5" />
               <span className="font-semibold">Upload</span>
             </button>
+
           </div>
 
           {/* Navigation */}
@@ -145,10 +274,24 @@ export default function Dashboard() {
 
             {/* Right side actions */}
             <div className="flex items-center space-x-4 ml-6">
-              <button className="p-2 hover:bg-purple-50 rounded-lg transition-colors relative">
-                <Bell className="w-5 h-5 text-gray-600" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowRequests(prev => !prev)}
+                  className="p-2 hover:bg-purple-50 rounded-lg transition-colors relative"
+                >
+                  <Bell className="w-5 h-5 cursor-pointer transform hover:translate-y-1 transition-all text-gray-600" />
+                  {requests && requests.length > 0 && (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  )}
+                </button>
+
+                {showRequests && (
+                  <CollabRequestsDropdown
+                    requests={requests ?? []}
+                    onClose={() => setShowRequests(false)}
+                  />
+                )}
+              </div>
               <button className="p-2 hover:bg-purple-50 rounded-lg transition-colors">
                 <Settings className="w-5 h-5 text-gray-600" />
               </button>
@@ -231,11 +374,11 @@ export default function Dashboard() {
               {filteredDocs.map((doc) => (
                 <div
                   key={doc._id.$oid}
-                  onClick={()=>{navigate("/doc/edit/"+doc._id.$oid,{state:doc})}}
                   className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border-2 border-purple-100 hover:border-purple-300 hover:shadow-xl transform hover:-translate-y-1 transition-all cursor-pointer group"
                 >
                   <div className="flex items-start justify-between mb-4">
-                    <div className="bg-linear-to-br from-purple-100 to-pink-100 p-3 rounded-xl">
+                    <div
+                      onClick={() => { navigate("/doc/edit/" + doc._id.$oid, { state: doc }) }} className="bg-linear-to-br from-purple-100 to-pink-100 p-3 rounded-xl">
                       <FileText className="w-6 h-6 text-purple-600" />
                     </div>
                     <div className="flex items-center space-x-2">
@@ -249,10 +392,10 @@ export default function Dashboard() {
                         />
                       </button>
                       <DocumentOptionsDropdown
-                        onEdit={() => navigate("/doc/edit/"+doc._id.$oid)}
+                        onEdit={() => navigate("/doc/edit/" + doc._id.$oid)}
                         onDelete={() => console.log('Delete', doc._id.$oid)}
                         onSave={() => console.log('Save', doc._id.$oid)}
-                        onShare={() => console.log('Share', doc._id.$oid)}
+                        onShare={() => { shareDoc(doc._id.$oid) }}
                       />
                     </div>
                   </div>

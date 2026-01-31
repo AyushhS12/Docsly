@@ -1,14 +1,17 @@
 use bson::DateTime;
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use mongodb::{
-    Client, Collection,
+    Client, Collection, IndexModel,
     bson::{self, doc},
-    results::UpdateResult,
+    options::IndexOptions,
+    results::{InsertOneResult, UpdateResult},
 };
 use std::env;
 
 use crate::{
-    models::{self, Doc, Error, IntoObjectId, LoginUser, Update, UpdateType},
+    models::{
+        self, Author, CollabRequest, Doc, Error, IntoObjectId, LoginUser, Update, UpdateType, UploadedDoc,
+    },
     utils::{hash_password, verify_password_hash},
 };
 
@@ -16,6 +19,8 @@ pub struct Db {
     users: Collection<models::User>,
     docs: Collection<models::Doc>,
     changes: Collection<models::Update>,
+    requests: Collection<models::CollabRequest>,
+    uploads: Collection<models::UploadedDoc>,
 }
 
 impl Db {
@@ -24,12 +29,43 @@ impl Db {
         let client = Client::with_uri_str(uri).await.unwrap();
         let database = client.database("docsly");
         let users = database.collection::<models::User>("users");
+        let email_index = IndexModel::builder()
+            .keys(doc! {"email":1})
+            .options(IndexOptions::builder().unique(true).build())
+            .build();
+        match users.create_index(email_index).await {
+            Ok(r) => {
+                log::info!("{:?}", r);
+            }
+            Err(_) => {
+                log::error!("an error occurred email index");
+            }
+        }
         let docs = database.collection::<models::Doc>("docs");
+        let uploads = database.collection::<models::UploadedDoc>("uploads");
         let changes = database.collection::<models::Update>("changes");
+        let requests = database.collection::<models::CollabRequest>("collab_requests");
+        let request_index = IndexModel::builder()
+            .keys(doc! {
+                "from":1,
+                "doc":1
+            })
+            .options(IndexOptions::builder().unique(true).build())
+            .build();
+        match requests.create_index(request_index).await {
+            Ok(r) => {
+                log::info!("{:?}", r);
+            }
+            Err(_) => {
+                log::error!("an error occurred request index")
+            }
+        };
         Db {
             users,
             docs,
             changes,
+            requests,
+            uploads
         }
     }
 
@@ -159,13 +195,15 @@ impl Db {
         }
     }
 
-    pub async fn find_docs_with_user_id<T: IntoObjectId>(&self, user_id: T) -> Option<Vec<Doc>> {
-        let user_id = user_id.into_objetc_id();
-        let res = self.docs.find(doc! {"author.id":user_id}).await;
-        match res {
-            Ok(c) => Some(c.try_collect().await.unwrap()),
-            Err(_) => None,
-        }
+    pub async fn find_docs_with_user_id<T: IntoObjectId>(
+        &self,
+        user_id: T,
+    ) -> Result<Vec<Doc>, Error> {
+        let res = self
+            .docs
+            .find(doc! {"author.id":user_id.into_objetc_id()})
+            .await?;
+        Ok(res.try_collect().await?)
     }
 
     ///Handle Updates
@@ -196,10 +234,12 @@ impl Db {
                 {
                     Ok(Some(doc)) => {
                         let old_data = doc.content;
-                        let new_data = if update.position == 0{
-                            data.to_owned() +  &old_data
+                        let new_data = if update.position == 0 {
+                            data.to_owned() + &old_data
                         } else {
-                            old_data[..update.position].to_owned() + data + &old_data[update.position-1..]
+                            old_data[..update.position].to_owned()
+                                + data
+                                + &old_data[update.position - 1..]
                         };
                         match self
                             .docs
@@ -233,7 +273,8 @@ impl Db {
                 match doc {
                     Ok(Some(document)) => {
                         let pos = update.position;
-                        let new_data = document.content[..pos].to_owned() + &document.content[(pos+length)-1..];
+                        let new_data = document.content[..pos].to_owned()
+                            + &document.content[(pos + length) - 1..];
                         let res = self
                             .docs
                             .update_one(
@@ -258,5 +299,71 @@ impl Db {
                 }
             }
         }
+    }
+    // Requests Collection
+
+    pub async fn get_collab_requests<T: IntoObjectId>(
+        &self,
+        user_id: T,
+    ) -> Result<Vec<CollabRequest>, Error> {
+        let res = self.requests.find(doc! {"author":user_id.into_objetc_id()}).await?;
+        let requests = res.try_collect().await?;
+        Ok(requests)
+    }
+
+    pub async fn add_collab_request<T: IntoObjectId>(
+        &self,
+        doc_id: T,
+        user_id: T,
+    ) -> Result<InsertOneResult, Error> {
+        let doc_id = doc_id.into_objetc_id();
+        let user_id = user_id.into_objetc_id();
+        match self
+            .docs
+            .find_one(doc! {"_id":doc_id.into_objetc_id()})
+            .await?
+        {
+            Some(doc) => {
+                let req = CollabRequest::new(doc.author.as_ref().unwrap().id.unwrap(),user_id, doc_id);
+                if let Some(Author { id: Some(i), .. }) = doc.author {
+                    if i == user_id || doc.collaborators.contains(&user_id) {
+                        return Ok(InsertOneResult::default());
+                    }
+                }
+                Ok(self.requests.insert_one(req).await?)
+            }
+            None => Err(Error::from("doc not found, invalid document id")),
+        }
+    }
+
+    pub async fn handle_collab_request(&self, req: CollabRequest) -> Result<(), Error> {
+        match self.requests.find_one(doc! {"_id":req.id}).await? {
+            Some(r) => {
+                match self
+                    .docs
+                    .find_one_and_update(
+                        doc! {"_id":r.doc},
+                        doc! {"$push":{
+                        "collaborators":r.from
+                        }},
+                    )
+                    .await?
+                {
+                    Some(d) => {
+                        todo!()
+                    }
+                    None => {
+                        todo!()
+                    }
+                }
+            }
+            None => Err(Error::from("request not found, invalid id")),
+        }
+    }
+
+    // Uploads Collection
+    /// # Not completed yet marked todo!()
+    pub async fn upload_doc(&self,doc: UploadedDoc) -> Result<(),Error>{
+        todo!()
     }
 }
