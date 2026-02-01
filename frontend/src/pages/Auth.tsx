@@ -68,7 +68,7 @@ export default function DocslyAuth() {
       setTimeout(() => {
         toast.error("An error occurred, please try again", {
           id: toastId,
-          icon: <ErrorIcon className="text-green-500" />,
+          icon: <ErrorIcon className="text-red-500" />,
           duration: 1500,
         })
       }, 1000)

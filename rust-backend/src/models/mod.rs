@@ -4,7 +4,12 @@ use chrono::Utc;
 use mongodb::bson::{DateTime, oid::ObjectId};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
-use std::{collections::HashMap, fmt::Display, str::{self, FromStr}, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt::Display,
+    str::{self, FromStr},
+    sync::Arc,
+};
 use tokio::sync::{Mutex, mpsc::Sender};
 
 pub trait IntoObjectId {
@@ -107,19 +112,32 @@ pub struct Author {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct UploadedDoc{
-    #[serde(rename = "_id",skip_serializing_if = "Option::is_none")]
+pub struct UploadedDoc {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
     pub owner: ObjectId,
     pub filename: String,
     pub content_type: String,
     pub size: usize,
-    pub data: Binary
+    pub data: Binary,
 }
 
-impl UploadedDoc{
-    pub fn new(owner: impl IntoObjectId, filename: String, content_type: String, size: usize, data: Binary) -> Self{
-        Self { id: None, owner:owner.into_objetc_id(), filename, content_type, size, data }
+impl UploadedDoc {
+    pub fn new(
+        owner: impl IntoObjectId,
+        filename: String,
+        content_type: String,
+        size: usize,
+        data: Binary,
+    ) -> Self {
+        Self {
+            id: None,
+            owner: owner.into_objetc_id(),
+            filename,
+            content_type,
+            size,
+            data,
+        }
     }
 }
 
@@ -143,14 +161,14 @@ pub struct Update {
 pub struct CollabRequest {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
-    pub author:ObjectId,
+    pub author: ObjectId,
     pub from: ObjectId,
     pub doc: ObjectId,
     pub timestamp: chrono::DateTime<Utc>,
 }
 
 impl CollabRequest {
-    pub fn new(author: ObjectId,from: ObjectId, doc: ObjectId) -> Self {
+    pub fn new(author: ObjectId, from: ObjectId, doc: ObjectId) -> Self {
         Self {
             id: None,
             author,
@@ -159,6 +177,13 @@ impl CollabRequest {
             timestamp: DateTime::now().into(),
         }
     }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "lowercase", tag = "action", content = "request")]
+pub enum CollabRequestHandler {
+    Accept(CollabRequest),
+    Reject(CollabRequest),
 }
 
 impl From<Update> for ws::Message {

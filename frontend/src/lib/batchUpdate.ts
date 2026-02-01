@@ -50,6 +50,7 @@ export function useBatchUpdates(sendUpdate: (update: InsertUpdate| DeleteUpdate 
           }
         } 
         else if (pending.type.update === "delete" && newUpdate.type.update === "delete") {
+          flush()
           // DELETE MERGE:
           // Valid if New Pos == Old Pos (User hit Delete key repeatedly)
           if (newUpdate.position === pending.position) {

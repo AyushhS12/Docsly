@@ -1,4 +1,4 @@
-use axum::{Router, extract::Request, routing::{get, post}};
+use axum::{Router, extract::Request, routing::{get, post, put}};
 mod auth;
 mod docs;
 mod edit;
@@ -17,7 +17,9 @@ pub fn doc_routes() -> Router{
         .route("/create", post(docs::create))
         .route("/collab/{doc_id}", get(docs::collab_request))
         .route("/get_collab_requests", get(docs::get_collab_requests))
-        .route("/get_doc", get(docs::get_doc));
+        .route("/collab/request", post(docs::handle_collab_request))
+        .route("/get_doc", get(docs::get_doc))
+        .route("/upload", put(docs::upload_doc));
     router
 }
 pub fn user_routes() -> Router{

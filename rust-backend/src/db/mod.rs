@@ -1,5 +1,5 @@
 use bson::DateTime;
-use futures::{StreamExt, TryStreamExt};
+use futures::TryStreamExt;
 use mongodb::{
     Client, Collection, IndexModel,
     bson::{self, doc},
@@ -10,7 +10,8 @@ use std::env;
 
 use crate::{
     models::{
-        self, Author, CollabRequest, Doc, Error, IntoObjectId, LoginUser, Update, UpdateType, UploadedDoc,
+        self, Author, CollabRequest, Doc, Error, IntoObjectId, LoginUser, Update, UpdateType,
+        UploadedDoc,
     },
     utils::{hash_password, verify_password_hash},
 };
@@ -65,7 +66,7 @@ impl Db {
             docs,
             changes,
             requests,
-            uploads
+            uploads,
         }
     }
 
@@ -182,8 +183,10 @@ impl Db {
     //     }
     // }
 
-    /// Login
-    pub async fn verify_user(&self, user: LoginUser) -> Result<(), Error> {
+    /// Login Function
+    ///
+    /// Don't know why this is unused
+    pub async fn _verify_user(&self, user: LoginUser) -> Result<(), Error> {
         let res = self.users.find_one(doc! {"email":user.email}).await;
         match res {
             Ok(Some(u)) => {
@@ -201,7 +204,10 @@ impl Db {
     ) -> Result<Vec<Doc>, Error> {
         let res = self
             .docs
-            .find(doc! {"author.id":user_id.into_objetc_id()})
+            .find(doc! {"$or":[
+                {"author.id":user_id.into_objetc_id()},
+                {"collaborators":{"$in":[user_id.into_objetc_id()]}}
+            ]})
             .await?;
         Ok(res.try_collect().await?)
     }
@@ -212,19 +218,6 @@ impl Db {
         doc_id: T,
         update: Update,
     ) -> Result<UpdateResult, Error> {
-        //
-        // let doc_id = doc_id.into_objetc_id();
-        // let (data_send, mut data_recv) = channel::<char>(256);
-        // tokio::spawn(async move {
-        //     let doc = doc_id.clone();
-        //     while let Some(data) = data_recv.recv().await {
-        //         self.docs.update_one(doc! {"_id":doc_id.into_objetc_id()}, doc! {
-        //             "":""
-        //         }).await;
-        //     }
-        // });
-        //
-
         match update.update_type {
             UpdateType::Insert { ref data } => {
                 match self
@@ -272,9 +265,13 @@ impl Db {
                     .await;
                 match doc {
                     Ok(Some(document)) => {
+                        let content_len = document.content.len();
                         let pos = update.position;
+                        if pos > content_len || (pos + length) > content_len {
+                            return Err("invalid input".into());
+                        }
                         let new_data = document.content[..pos].to_owned()
-                            + &document.content[(pos + length) - 1..];
+                            + &document.content[(pos + length)..];
                         let res = self
                             .docs
                             .update_one(
@@ -306,7 +303,10 @@ impl Db {
         &self,
         user_id: T,
     ) -> Result<Vec<CollabRequest>, Error> {
-        let res = self.requests.find(doc! {"author":user_id.into_objetc_id()}).await?;
+        let res = self
+            .requests
+            .find(doc! {"author":user_id.into_objetc_id()})
+            .await?;
         let requests = res.try_collect().await?;
         Ok(requests)
     }
@@ -324,9 +324,11 @@ impl Db {
             .await?
         {
             Some(doc) => {
-                let req = CollabRequest::new(doc.author.as_ref().unwrap().id.unwrap(),user_id, doc_id);
+                let req =
+                    CollabRequest::new(doc.author.as_ref().unwrap().id.unwrap(), user_id, doc_id);
                 if let Some(Author { id: Some(i), .. }) = doc.author {
                     if i == user_id || doc.collaborators.contains(&user_id) {
+                        log::debug!("already author or a collaborator");
                         return Ok(InsertOneResult::default());
                     }
                 }
@@ -349,21 +351,39 @@ impl Db {
                     )
                     .await?
                 {
-                    Some(d) => {
-                        todo!()
+                    Some(_d) => {
+                        log::debug!("accepted request");
+                        Ok(())
                     }
-                    None => {
-                        todo!()
-                    }
+                    None => Err("request not found".into()),
                 }
             }
             None => Err(Error::from("request not found, invalid id")),
         }
     }
 
+    pub async fn reject_collab_request(&self, req: CollabRequest) -> Result<CollabRequest, Error> {
+        match self
+            .requests
+            .find_one_and_delete(doc! {"_id": req.id})
+            .await?
+        {
+            Some(r) => Ok(r),
+            None => Err("request not found".into()),
+        }
+    }
+
     // Uploads Collection
-    /// # Not completed yet marked todo!()
-    pub async fn upload_doc(&self,doc: UploadedDoc) -> Result<(),Error>{
-        todo!()
+    pub async fn upload_doc(&self, doc: UploadedDoc) -> Result<InsertOneResult, Error> {
+        Ok(self.uploads.insert_one(doc).await?)
+    }
+
+    pub async fn get_uploads(&self, owner: impl IntoObjectId) -> Result<Vec<UploadedDoc>, Error> {
+        Ok(self
+            .uploads
+            .find(doc! {"owner":owner.into_objetc_id()})
+            .await?
+            .try_collect()
+            .await?)
     }
 }

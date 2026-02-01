@@ -62,7 +62,6 @@ export default function Edit() {
         // setTimeout(connectWebSocket,2000)
       }
       ws.onmessage = (msg) => {
-        console.log(msg.data)
         const update = JSON.parse(msg.data) as InsertUpdate | DeleteUpdate
         setContent(prev => applyRemoteUpdate(prev, update))
       }

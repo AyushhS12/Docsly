@@ -47,6 +47,27 @@ export interface CollabRequest{
   timestamp:string
 }
 
+export interface CollabRequestHandler{
+  action: "accept" | "reject",
+  request: CollabRequest
+}
+
+export interface UploadedFile{
+  _id: Id,
+  owner: Id,
+  content_type: string,
+  filename:string,
+  size: number
+  data: number[]
+}
+
+export interface UploadedDoc{
+  _id: Id,
+  author: Id,
+  content: string,
+  title: string,
+}
+
 
 export function applyRemoteUpdate(
   content: string,

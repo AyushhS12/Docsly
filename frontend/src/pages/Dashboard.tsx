@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, Plus, Upload, Edit3, Search, Filter, MoreVertical, Clock, Users, Star, Share2, Download, FolderOpen, Grid, List, Bell, Settings, User, LogOut, CheckCircle } from 'lucide-react';
+import { FileText, Plus, Upload, Edit3, Search, Filter, MoreVertical, Clock, Users, Star, Share2, FolderOpen, Grid, List, Bell, Settings, User, LogOut, CheckCircle } from 'lucide-react';
 import useAuthGuard from '../context/auth/useAuthGuard';
 import CreateNewPopup from '../components/CreateNewPopUp';
 import api, { BaseUrl } from '../lib/api';
 import toast, { ErrorIcon } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import DocumentOptionsDropdown from '../components/DocumentOptionsDropdown';
-import type { CollabRequest, Doc } from '../lib/utils';
+import type { CollabRequest, Doc, UploadedDoc, UploadedFile } from '../lib/utils';
 import CollabRequestsDropdown from '../components/CollabRequestDropdown';
+import DocumentGrid from '../components/DocumentGrid';
 
 
 export default function Dashboard() {
@@ -16,6 +16,9 @@ export default function Dashboard() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [collabs, setCollabs] = useState<Doc[]>([]);
+  const [uploads, setUploads] = useState<UploadedDoc[]>([]);
+
   const [requests, setRequests] = useState<CollabRequest[]>();
   const { guard, logout } = useAuthGuard()
   const navigate = useNavigate()
@@ -26,6 +29,10 @@ export default function Dashboard() {
   const [isUploadPopupOpen, setIsUploadPopupOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+
+  const onOpen = (id: string) => {
+    navigate("/doc/edit/" + id);
+  }
 
   const shareDoc = (id: string) => {
     const toastId = toast.loading("Copying link...")
@@ -64,17 +71,47 @@ export default function Dashboard() {
   }
 
   const getUserDocs = useCallback(async () => {
-    const res = await api.get<{ docs: Doc[] }>("/doc/get_docs", { withCredentials: true })
+    const res = await api.get<{ docs: Doc[], collabs: Doc[], uploads: UploadedFile[] }>("/doc/get_docs", { withCredentials: true })
     if (res.data) {
       setDocs(res.data.docs)
-      console.log(res.data.docs)
+      setCollabs(res.data.collabs)
+      res.data.uploads.forEach((x) => {
+        const bytes = new Uint8Array(x.data)
+        const text = new TextDecoder("utf-8").decode(bytes)
+        setUploads(prev => {
+          const exists = prev.find(u => u._id.$oid === x._id.$oid);
+          if (exists) {
+            // update existing
+            return prev.map(u =>
+              u._id.$oid === x._id.$oid
+                ? {
+                  ...u,
+                  author: x.owner,
+                  title: x.filename,
+                  content: text,
+                }
+                : u
+            );
+          }
+          // insert new
+          return [
+            ...prev,
+            {
+              _id: x._id,
+              author: x.owner,
+              title: x.filename,
+              content: text,
+            },
+          ];
+        });
+      })
     }
   }, [])
-
+  console.log(uploads)
   const onCreate = useCallback(async (type: string, name: string) => {
     const toastId = toast.loading("Creating Document... Please wait")
     try {
-      const res = await api.post<{ success: boolean, message: string }>("/doc/create", { title: name, type })
+      const res = await api.post<{ success: boolean, message: string }>("/doc/create", { title: name, type, collaborators: [] })
       if (res.data.success) {
         getUserDocs()
         setTimeout(() => {
@@ -111,6 +148,7 @@ export default function Dashboard() {
 
   const toggleStar = (id: string) => {
     setDocs(docs.map(doc => doc._id.$oid === id ? { ...doc, starred: !doc.starred } : doc));
+    setCollabs(collabs.map(doc => doc._id.$oid === id ? { ...doc, starred: !doc.starred } : doc));
   };
 
   const uploadFile = async () => {
@@ -122,7 +160,7 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      await api.post("/doc/upload", formData, {
+      await api.put("/doc/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -370,69 +408,31 @@ export default function Dashboard() {
 
           {/* Documents Grid/List */}
           {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredDocs.map((doc) => (
-                <div
-                  key={doc._id.$oid}
-                  className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border-2 border-purple-100 hover:border-purple-300 hover:shadow-xl transform hover:-translate-y-1 transition-all cursor-pointer group"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div
-                      onClick={() => { navigate("/doc/edit/" + doc._id.$oid, { state: doc }) }} className="bg-linear-to-br from-purple-100 to-pink-100 p-3 rounded-xl">
-                      <FileText className="w-6 h-6 text-purple-600" />
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => toggleStar(doc._id.$oid)}
-                        className="p-1 hover:bg-purple-50 rounded transition-colors"
-                      >
-                        <Star
-                          className={`w-5 h-5 ${doc.starred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'
-                            }`}
-                        />
-                      </button>
-                      <DocumentOptionsDropdown
-                        onEdit={() => navigate("/doc/edit/" + doc._id.$oid)}
-                        onDelete={() => console.log('Delete', doc._id.$oid)}
-                        onSave={() => console.log('Save', doc._id.$oid)}
-                        onShare={() => { shareDoc(doc._id.$oid) }}
-                      />
-                    </div>
-                  </div>
+            <>
+              <DocumentGrid
+                docs={filteredDocs}
+                onShare={shareDoc}
+                onOpen={onOpen}
+                onToggleStar={toggleStar}
+              />
+              {/* Collabs */}
+              {collabs.length > 0 && (
+                <>
+                  <h2 className="text-2xl font-bold mt-12 mb-4 text-gray-800">
+                    Shared With Me
+                  </h2>
 
-                  <h3 className="text-lg font-bold text-gray-800 mb-2 group-hover:text-purple-600 transition-colors">
-                    {doc.title}
-                  </h3>
-
-                  <div className="flex items-center space-x-4 text-sm text-gray-600 mb-4">
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-4 h-4" />
-                      {/* <span>{doc.last_update}</span> */}
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Users className="w-4 h-4" />
-                      {doc.collaborators?.map(x => {
-                        return (
-                          <span>{x.$oid}</span>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                    <span className="text-sm text-gray-600">Author: {doc.author.name}</span>
-                    <div className="flex space-x-1">
-                      <button className="p-2 hover:bg-purple-50 rounded-lg transition-colors">
-                        <Share2 className="w-4 h-4 text-gray-600" />
-                      </button>
-                      <button className="p-2 hover:bg-purple-50 rounded-lg transition-colors">
-                        <Download className="w-4 h-4 text-gray-600" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  <DocumentGrid
+                    docs={collabs.filter(doc =>
+                      doc.title.toLowerCase().includes(searchQuery.toLowerCase())
+                    )}
+                    onOpen={onOpen}
+                    onShare={shareDoc}
+                    onToggleStar={toggleStar}
+                  />
+                </>
+              )}
+            </>
           ) : (
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-purple-100 overflow-hidden">
               <div className="overflow-x-auto">

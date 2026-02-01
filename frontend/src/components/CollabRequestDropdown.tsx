@@ -1,13 +1,15 @@
-import { Check, X, Users, Clock, FileText } from "lucide-react";
-import type { CollabRequest } from "../lib/utils";
+import { Check, X, Users, Clock, FileText, CheckCircle2 } from "lucide-react";
+import type { CollabRequest, CollabRequestHandler } from "../lib/utils";
 import { useEffect, useRef } from "react";
+import api from "../lib/api";
+import toast, { ErrorIcon } from "react-hot-toast";
 
 interface Props {
     requests: CollabRequest[];
     onClose: () => void;
 }
 
-export default function CollabRequestsDropdown({ requests, onClose}: Props) {
+export default function CollabRequestsDropdown({ requests, onClose }: Props) {
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -20,9 +22,45 @@ export default function CollabRequestsDropdown({ requests, onClose}: Props) {
         return () => document.removeEventListener("mousedown", handleClick);
     }, [onClose]);
 
+    const handleRequest = async (data: CollabRequestHandler) => {
+        const toastId = toast.loading("Loading...")
+        try {
+            const res = await api.post("/doc/collab/request", data)
+            if (res.data.success) {
+                if (data.action === "accept") {
+                    setTimeout(() => {
+                        toast.success("Request Accepted", {
+                            id: toastId,
+                            icon: <CheckCircle2 className="text-green-500" />,
+                            duration: 2000,
+                        })
+                    }, 1300)
+                } else {
+                    setTimeout(() => {
+                        toast.success("Request Rejected", {
+                            id: toastId,
+                            icon: <CheckCircle2 className="text-green-500" />,
+                            duration: 2000,
+                        })
+                    }, 1300)
+                }
+                return
+            }
+            setTimeout(() => {
+                toast.success("An error Occured", {
+                    id: toastId,
+                    icon: <ErrorIcon className="text-red-500" />,
+                    duration: 1500,
+                })
+            }, 1300)
+        } catch (e) {
+            console.log(e)
+        }
+    }
+
     return (
-        <div 
-            ref={ref} 
+        <div
+            ref={ref}
             className="absolute right-0 mt-3 w-96 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-purple-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         >
             {/* Header */}
@@ -89,14 +127,14 @@ export default function CollabRequestsDropdown({ requests, onClose}: Props) {
                                     {/* Action Buttons */}
                                     <div className="flex items-center space-x-2 pt-1">
                                         <button
-                                            onClick={() => console.log("accepted "+req.doc.$oid)}
+                                            onClick={() => handleRequest({ action: "accept", request: req })}
                                             className="flex-1 flex items-center justify-center space-x-2 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition-all shadow-md active:scale-95"
                                         >
                                             <Check className="w-3.5 h-3.5" />
                                             <span>Accept</span>
                                         </button>
                                         <button
-                                            onClick={() => console.log("rejected "+req.doc.$oid)}
+                                            onClick={() => handleRequest({ action: "reject", request: req })}
                                             className="flex-1 flex items-center justify-center space-x-2 py-2 bg-white text-gray-600 border border-gray-200 rounded-lg text-xs font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all active:scale-95"
                                         >
                                             <X className="w-3.5 h-3.5" />
