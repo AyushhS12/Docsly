@@ -41,7 +41,7 @@ export default function Dashboard() {
       if (BaseUrl === "") {
         shareLink = "http://localhost:5173/doc/collab/" + id;
       } else {
-        shareLink = BaseUrl + "/doc/collab/" + id;
+        shareLink = import.meta.url + "/doc/collab/" + id;
       }
       navigator.clipboard.writeText(shareLink)
       setTimeout(() => {
