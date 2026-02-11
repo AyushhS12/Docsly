@@ -86,7 +86,6 @@ export default function Edit() {
   }, [connectWebSocket, guard, navigate]);
   const sendUpdate = useCallback((update: InsertUpdate | DeleteUpdate) => {
     if (isConnected) {
-      console.log('Sending update to WebSocket:', update);
       wsRef.current?.send(JSON.stringify(update));
     }
   }, [isConnected])

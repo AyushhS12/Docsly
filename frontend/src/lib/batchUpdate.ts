@@ -17,8 +17,6 @@ export function useBatchUpdates(sendUpdate: (update: InsertUpdate| DeleteUpdate 
         ...pendingUpdateRef.current,
         timestamp: new Date().toISOString()
       };
-      
-      console.log("Flushing batch:", updateToSend);
       sendUpdate(updateToSend);
       
       pendingUpdateRef.current = null;

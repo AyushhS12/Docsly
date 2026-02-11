@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText, Plus, Upload, Edit3, Search, Filter, MoreVertical, Clock, Users, Star, Share2, FolderOpen, Grid, List, Bell, Settings, User, LogOut, CheckCircle } from 'lucide-react';
 import useAuthGuard from '../context/auth/useAuthGuard';
 import CreateNewPopup from '../components/CreateNewPopUp';
@@ -107,7 +107,6 @@ export default function Dashboard() {
       })
     }
   }, [])
-  console.log(uploads)
   const onCreate = useCallback(async (type: string, name: string) => {
     const toastId = toast.loading("Creating Document... Please wait")
     try {
@@ -185,9 +184,15 @@ export default function Dashboard() {
     }
   };
 
-  const filteredDocs = docs.filter(doc =>
-    doc.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredDocs = useMemo(() => {
+    return docs.filter(doc =>
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [docs, searchQuery]);
+
+  const filteredCollabs = useMemo(() => {
+    return collabs.filter(doc => doc.title.toLowerCase().includes(searchQuery.toLowerCase()))
+  }, [collabs, searchQuery])
 
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50">
@@ -423,9 +428,7 @@ export default function Dashboard() {
                   </h2>
 
                   <DocumentGrid
-                    docs={collabs.filter(doc =>
-                      doc.title.toLowerCase().includes(searchQuery.toLowerCase())
-                    )}
+                    docs={filteredCollabs}
                     onOpen={onOpen}
                     onShare={shareDoc}
                     onToggleStar={toggleStar}
@@ -434,64 +437,126 @@ export default function Dashboard() {
               )}
             </>
           ) : (
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-purple-100 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-purple-50">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Document</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Owner</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Last Edited</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Collaborators</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {filteredDocs.map((doc) => (
-                      <tr key={doc._id.$oid} className="hover:bg-purple-50 transition-colors cursor-pointer">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center space-x-3">
-                            <div className="bg-linear-to-br from-purple-100 to-pink-100 p-2 rounded-lg">
-                              <FileText className="w-5 h-5 text-purple-600" />
-                            </div>
-                            <span className="font-semibold text-gray-800">{doc.title}</span>
-                            {doc.starred && <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-700">{doc.author.id.$oid}</td>
-                        {/* <td className="px-6 py-4 text-gray-600">{doc.last_update}</td> */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center space-x-1 text-gray-600">
-                            <Users className="w-4 h-4" />
-                            {doc.collaborators.map(x => {
-                              return (
-                                <span>{x.$oid}</span>
-                              )
-                            })}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center space-x-2">
-                            <button className="p-2 hover:bg-white rounded-lg transition-colors">
-                              <Edit3 className="w-4 h-4 text-gray-600" />
-                            </button>
-                            <button className="p-2 hover:bg-white rounded-lg transition-colors">
-                              <Share2 className="w-4 h-4 text-gray-600" />
-                            </button>
-                            <button className="p-2 hover:bg-white rounded-lg transition-colors">
-                              <MoreVertical className="w-4 h-4 text-gray-600" />
-                            </button>
-                          </div>
-                        </td>
+            <>
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-purple-100 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-purple-50">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Document</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Owner</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Last Edited</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Collaborators</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredDocs.map((doc) => (
+                        <tr key={doc._id.$oid} className="hover:bg-purple-50 transition-colors cursor-pointer">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="bg-linear-to-br from-purple-100 to-pink-100 p-2 rounded-lg">
+                                <FileText className="w-5 h-5 text-purple-600" />
+                              </div>
+                              <span className="font-semibold text-gray-800">{doc.title}</span>
+                              {doc.starred && <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-gray-700">{doc.author.id.$oid}</td>
+                          <td className="px-6 py-4 text-gray-600">{doc.last_update.toString()}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-1 text-gray-600">
+                              <Users className="w-4 h-4" />
+                              {doc.collaborators.map(x => {
+                                return (
+                                  <span>{x.$oid}</span>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-2">
+                              <button className="p-2 hover:bg-white rounded-lg transition-colors">
+                                <Edit3 className="w-4 h-4 text-gray-600" />
+                              </button>
+                              <button className="p-2 hover:bg-white rounded-lg transition-colors">
+                                <Share2 className="w-4 h-4 text-gray-600" />
+                              </button>
+                              <button className="p-2 hover:bg-white rounded-lg transition-colors">
+                                <MoreVertical className="w-4 h-4 text-gray-600" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+              {filteredCollabs.length !== 0 && <>
+                <h2 className="text-2xl font-bold mt-12 mb-4 text-gray-800">
+                  Shared With Me
+                </h2>
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-purple-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-purple-50">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Document</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Owner</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Last Edited</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Collaborators</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {filteredCollabs.map((doc) => (
+                          <tr key={doc._id.$oid} className="hover:bg-purple-50 transition-colors cursor-pointer">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center space-x-3">
+                                <div className="bg-linear-to-br from-purple-100 to-pink-100 p-2 rounded-lg">
+                                  <FileText className="w-5 h-5 text-purple-600" />
+                                </div>
+                                <span className="font-semibold text-gray-800">{doc.title}</span>
+                                {doc.starred && <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-gray-700">{doc.author.id.$oid}</td>
+                            {/* <td className="px-6 py-4 text-gray-600">{doc.last_update}</td> */}
+                            <td className="px-6 py-4">
+                              <div className="flex items-center space-x-1 text-gray-600">
+                                <Users className="w-4 h-4" />
+                                {doc.collaborators.map(x => {
+                                  return (
+                                    <span>{x.$oid}</span>
+                                  )
+                                })}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center space-x-2">
+                                <button className="p-2 hover:bg-white rounded-lg transition-colors">
+                                  <Edit3 className="w-4 h-4 text-gray-600" />
+                                </button>
+                                <button className="p-2 hover:bg-white rounded-lg transition-colors">
+                                  <Share2 className="w-4 h-4 text-gray-600" />
+                                </button>
+                                <button className="p-2 hover:bg-white rounded-lg transition-colors">
+                                  <MoreVertical className="w-4 h-4 text-gray-600" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>}
+            </>
           )}
 
-          {filteredDocs.length === 0 && (
+          {filteredDocs.length === 0 && collabs.length === 0 && uploads.length === 0 && (
             <div className="text-center py-16">
               <div className="bg-linear-to-br from-purple-100 to-pink-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FileText className="w-12 h-12 text-purple-600" />

@@ -77,7 +77,6 @@ export function applyRemoteUpdate(
 
   // Safety clamp
   if (pos < 0 || pos > content.length) {
-    console.warn("Invalid update position", update)
     return content
   }
 
