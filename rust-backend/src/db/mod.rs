@@ -352,8 +352,15 @@ impl Db {
                     .await?
                 {
                     Some(_d) => {
-                        log::debug!("accepted request");
-                        Ok(())
+                        match self.requests.find_one_and_delete(doc! {"_id":r.id}).await?{
+                            Some(re) => {
+                                log::debug!("accepted request: {:?}",re);
+                                Ok(())
+                            }
+                            None => {
+                                Err("an internal error".into())
+                            }
+                        }
                     }
                     None => Err("request not found".into()),
                 }

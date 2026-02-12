@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText, Plus, Upload, Edit3, Search, Filter, MoreVertical, Clock, Users, Star, Share2, FolderOpen, Grid, List, Bell, Settings, User, LogOut, CheckCircle } from 'lucide-react';
 import useAuthGuard from '../context/auth/useAuthGuard';
 import CreateNewPopup from '../components/CreateNewPopUp';
-import api, { BaseUrl } from '../lib/api';
+import api from '../lib/api';
 import toast, { ErrorIcon } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import type { CollabRequest, Doc, UploadedDoc, UploadedFile } from '../lib/utils';
@@ -37,13 +37,7 @@ export default function Dashboard() {
   const shareDoc = (id: string) => {
     const toastId = toast.loading("Copying link...")
     try {
-      let shareLink;
-      if (BaseUrl === "") {
-        shareLink = "http://localhost:5173/doc/collab/" + id;
-      } else {
-        shareLink = window.location.origin + "/doc/collab/" + id;
-      }
-      navigator.clipboard.writeText(shareLink)
+      navigator.clipboard.writeText(window.location.origin + "/doc/collab/" + id)
       setTimeout(() => {
         toast.success("Link copied to clipboard", {
           id: toastId,
